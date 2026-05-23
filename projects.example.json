@@ -4,9 +4,9 @@
 		"TRELLO_TOKEN":"your_trello_member_token",
 		"TRELLO_BOARD_URL":"https://trello.com/b/board_short_id/board_name",
 		"TRELLO_BOARD_EMAIL":"your_board_email@boards.trello.com",
-		"TRELLO_INBOX_LIST":"Incoming Tickets",
-		"TRELLO_ACTIVE_LIST":"Active Tickets",
-		"TRELLO_COMPLETED_LIST":"Completed Tickets",
+		"TRELLO_LIST_INCOMING":"Incoming Tickets",
+		"TRELLO_LIST_ACTIVE":"Active Tickets",
+		"TRELLO_LIST_COMPLETED":"Completed Tickets",
 		"BILLING_LOG_FILE":"C:/path/to/billing-log.md"
 	}
 }

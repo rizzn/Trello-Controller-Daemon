@@ -10,9 +10,9 @@ This repository contains a lightweight, zero-dependency Node.js tool to control 
 
 ### Board List Requirements
 To work correctly, the target Trello board must have the following list naming conventions:
-- **Inbox List:** Configured via `TRELLO_INBOX_LIST` in `projects.json` (defaults to `"Incoming Tickets"`).
-- **Active List:** Configured via `TRELLO_ACTIVE_LIST` in `projects.json` (defaults to `"Active Tickets"`).
-- **Completed List:** Configured via `TRELLO_COMPLETED_LIST` in `projects.json` (defaults to `"Completed Tickets"`). If the specified list is not found, the controller falls back to checking list names containing `"implemented"`, `"completed"`, `"complete"`, or `"done"`.
+- **Inbox List:** Configured via `TRELLO_LIST_INCOMING` in `projects.json` (defaults to `"Incoming Tickets"`).
+- **Active List:** Configured via `TRELLO_LIST_ACTIVE` in `projects.json` (defaults to `"Active Tickets"`).
+- **Completed List:** Configured via `TRELLO_LIST_COMPLETED` in `projects.json` (defaults to `"Completed Tickets"`). If the specified list is not found, the controller falls back to checking list names containing `"implemented"`, `"completed"`, `"complete"`, or `"done"`.
 
 ## 2. Execution Paths
 When working in a project workspace that is symlinked to the central `.agents` directory:

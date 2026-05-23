@@ -1,3 +1,14 @@
+<p align="center">
+  <img src="logo.jpg" alt="Trello Controller Daemon Logo" width="500">
+</p>
+
+<p align="center">
+  <a href="https://github.com/rizzn/Trello-Controller-Daemon"><img src="https://img.shields.io/github/license/rizzn/Trello-Controller-Daemon" alt="License"></a>
+  <a href="https://github.com/rizzn/Trello-Controller-Daemon"><img src="https://img.shields.io/github/repo-size/rizzn/Trello-Controller-Daemon" alt="Repo Size"></a>
+  <a href="https://github.com/rizzn/Trello-Controller-Daemon"><img src="https://img.shields.io/github/stars/rizzn/Trello-Controller-Daemon?style=flat-square" alt="Stars"></a>
+  <a href="https://github.com/rizzn/Trello-Controller-Daemon"><img src="https://img.shields.io/github/issues/rizzn/Trello-Controller-Daemon" alt="Issues"></a>
+</p>
+
 # Trello Controller Daemon
 
 A lightweight, configuration-driven command-line interface (CLI) and background daemon runner for managing and automating multiple Trello boards, featuring built-in session tracking and billing logging.
@@ -53,9 +64,9 @@ This ensures zero configuration overhead per workspace.
        "TRELLO_TOKEN": "your_trello_member_token",
        "TRELLO_BOARD_URL": "https://trello.com/b/board_id/board_name",
        "TRELLO_BOARD_EMAIL": "your_board_email@boards.trello.com",
-       "TRELLO_INBOX_LIST": "Incoming Tickets",
-       "TRELLO_ACTIVE_LIST": "Active Tickets",
-       "TRELLO_COMPLETED_LIST": "Completed Tickets",
+       "TRELLO_LIST_INCOMING": "Incoming Tickets",
+       "TRELLO_LIST_ACTIVE": "Active Tickets",
+       "TRELLO_LIST_COMPLETED": "Completed Tickets",
        "BILLING_LOG_FILE": "C:/path/to/billing-log.md"
      }
    }
@@ -71,9 +82,9 @@ This ensures zero configuration overhead per workspace.
 
 ### Board List Requirements
 To ensure the automated workflows function correctly, your Trello board must contain:
-- **Inbox List:** Configured via `TRELLO_INBOX_LIST` in `projects.json` (defaults to `"Incoming Tickets"` if not set).
-- **Active Work List:** Configured via `TRELLO_ACTIVE_LIST` in `projects.json` (defaults to `"Active Tickets"` if not set).
-- **Completed List:** Configured via `TRELLO_COMPLETED_LIST` in `projects.json` (defaults to `"Completed Tickets"`). If the specified list is not found, the controller falls back to checking list names containing `"implemented"`, `"completed"`, `"complete"`, or `"done"`.
+- **Inbox List:** Configured via `TRELLO_LIST_INCOMING` in `projects.json` (defaults to `"Incoming Tickets"` if not set).
+- **Active Work List:** Configured via `TRELLO_LIST_ACTIVE` in `projects.json` (defaults to `"Active Tickets"` if not set).
+- **Completed List:** Configured via `TRELLO_LIST_COMPLETED` in `projects.json` (defaults to `"Completed Tickets"`). If the specified list is not found, the controller falls back to checking list names containing `"implemented"`, `"completed"`, `"complete"`, or `"done"`.
 
 ## Usage
 

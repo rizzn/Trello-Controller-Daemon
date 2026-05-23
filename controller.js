@@ -46,9 +46,9 @@ if(fs.existsSync(globalConfigPath)) {
 
 const priorityOrder=globalConfig.priorityOrder||['Important','Bug','Feature','UI/UX','Refactor','Controlling'];
 const labelMappings=globalConfig.labelMappings||[];
-const INBOX_LIST_NAME=config.TRELLO_INBOX_LIST||'Incoming Tickets';
-const ACTIVE_LIST_NAME=config.TRELLO_ACTIVE_LIST||'Active Tickets';
-const COMPLETED_LIST_NAME=config.TRELLO_COMPLETED_LIST||'Completed Tickets';
+const INBOX_LIST_NAME=config.TRELLO_LIST_INCOMING||'Incoming Tickets';
+const ACTIVE_LIST_NAME=config.TRELLO_LIST_ACTIVE||'Active Tickets';
+const COMPLETED_LIST_NAME=config.TRELLO_LIST_COMPLETED||'Completed Tickets';
 
 // Extract Board ID from Board URL if necessary
 let boardId = BOARD_URL;
