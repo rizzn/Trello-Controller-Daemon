@@ -5,10 +5,12 @@ const https = require('https');
 // 1. Load configuration from the central projects.json
 const projectsPath=path.join(__dirname,'projects.json');
 let config={};
+let projects={};
 
 if(fs.existsSync(projectsPath)) {
 	try {
-		const projects=JSON.parse(fs.readFileSync(projectsPath,'utf8'));
+		projects=JSON.parse(fs.readFileSync(projectsPath,'utf8'));
+		const boards=projects.TRELLO_BOARDS||{};
 		const currentPath=process.cwd().replace(/\\/g,'/').toLowerCase();
 		const boardContext=process.env.TRELLO_BOARD_CONTEXT;
 		
@@ -17,25 +19,25 @@ if(fs.existsSync(projectsPath)) {
 		
 		if(boardContext) {
 			// Find config directly by board URL/key
-			matchedKey=Object.keys(projects).find(k=>k.toLowerCase()===boardContext.toLowerCase()||k.includes(boardContext));
+			matchedKey=Object.keys(boards).find(k=>k.toLowerCase()===boardContext.toLowerCase()||k.includes(boardContext));
 			if(matchedKey) {
-				const boardConfig=projects[matchedKey];
+				const boardConfig=boards[matchedKey];
 				// See if the current directory matches any project under this board to resolve billing path
-				if(boardConfig.PROJECTS&&Array.isArray(boardConfig.PROJECTS)) {
-					matchedProject=boardConfig.PROJECTS.find(p=>p.folder_path&&p.folder_path.replace(/\\/g,'/').toLowerCase()===currentPath);
-					if(!matchedProject&&boardConfig.PROJECTS.length>0) {
-						matchedProject=boardConfig.PROJECTS[0];
+				if(boardConfig.LOCAL_PROJECTS&&Array.isArray(boardConfig.LOCAL_PROJECTS)) {
+					matchedProject=boardConfig.LOCAL_PROJECTS.find(p=>p.folder_path&&p.folder_path.replace(/\\/g,'/').toLowerCase()===currentPath);
+					if(!matchedProject&&boardConfig.LOCAL_PROJECTS.length>0) {
+						matchedProject=boardConfig.LOCAL_PROJECTS[0];
 					}
 				}
 			}
 		}
 		
 		if(!matchedKey) {
-			// Find by matching current folder inside PROJECTS
-			matchedKey=Object.keys(projects).find(k=>{
-				const boardConfig=projects[k];
-				if(boardConfig.PROJECTS&&Array.isArray(boardConfig.PROJECTS)) {
-					matchedProject=boardConfig.PROJECTS.find(p=>p.folder_path&&p.folder_path.replace(/\\/g,'/').toLowerCase()===currentPath);
+			// Find by matching current folder inside LOCAL_PROJECTS
+			matchedKey=Object.keys(boards).find(k=>{
+				const boardConfig=boards[k];
+				if(boardConfig.LOCAL_PROJECTS&&Array.isArray(boardConfig.LOCAL_PROJECTS)) {
+					matchedProject=boardConfig.LOCAL_PROJECTS.find(p=>p.folder_path&&p.folder_path.replace(/\\/g,'/').toLowerCase()===currentPath);
 					return !!matchedProject;
 				}
 				return false;
@@ -43,7 +45,7 @@ if(fs.existsSync(projectsPath)) {
 		}
 
 		if(matchedKey) {
-			config=JSON.parse(JSON.stringify(projects[matchedKey]));
+			config=JSON.parse(JSON.stringify(boards[matchedKey]));
 			if(!config.TRELLO_BOARD_URL) {
 				config.TRELLO_BOARD_URL=matchedKey;
 			}
@@ -57,8 +59,8 @@ if(fs.existsSync(projectsPath)) {
 	}
 }
 
-const KEY=config.TRELLO_KEY;
-const TOKEN=config.TRELLO_TOKEN;
+const KEY=config.TRELLO_KEY || projects.TRELLO_KEY;
+const TOKEN=config.TRELLO_TOKEN || projects.TRELLO_TOKEN;
 let BOARD_URL=config.TRELLO_BOARD_URL;
 
 if(!KEY||!TOKEN||!BOARD_URL) {
@@ -233,7 +235,7 @@ async function moveCard(cardShortLink, targetListName) {
         const card = await apiRequest('GET', `/cards/${cardShortLink}`);
         
         console.log(`Moving card [${cardShortLink}] "${card.name}" to list "${targetList.name}"...`);
-        await apiRequest('PUT', `/cards/${card.id}?idList=${targetList.id}`);
+        await apiRequest('PUT', `/cards/${card.id}?idList=${targetList.id}&pos=top`);
         console.log('\x1b[32mCard successfully moved!\x1b[0m');
     } catch (error) {
         console.error(error);
@@ -276,7 +278,7 @@ async function startCard(cardShortLink) {
         await embedMissingImages(card);
         
         console.log(`Moving card [${cardShortLink}] "${card.name}" to list "${targetList.name}"...`);
-        await apiRequest('PUT', `/cards/${card.id}?idList=${targetList.id}`);
+        await apiRequest('PUT', `/cards/${card.id}?idList=${targetList.id}&pos=top`);
         
         const timestamp = new Date().toLocaleString('de-DE');
         const commentText = `Processing started at ${timestamp}`;
@@ -679,7 +681,7 @@ async function completeSession(cardShortLink, manualTimeEstimate = '') {
         if(!targetList) throw `No matching list ("${COMPLETED_LIST_NAME}", "Implemented", "Completed", or "Done") found!`;
         
         console.log(`Moving card [${cardShortLink}] "${card.name}" to list "${targetList.name}"...`);
-        await apiRequest('PUT', `/cards/${card.id}?idList=${targetList.id}`);
+        await apiRequest('PUT', `/cards/${card.id}?idList=${targetList.id}&pos=top`);
         
         // Delete local active_ticket.json if present
         const activeTicketPath = path.join(process.cwd(), 'active_ticket.json');
@@ -785,6 +787,101 @@ async function completeSession(cardShortLink, manualTimeEstimate = '') {
         console.log('\x1b[32mSession successfully completed and documented in the billing log!\x1b[0m');
     } catch (error) {
         console.error(error);
+    }
+}
+
+async function showNewTickets() {
+    try {
+        console.log('Checking for new tickets across all registered boards...');
+        if (!fs.existsSync(projectsPath)) {
+            console.error('projects.json not found!');
+            return;
+        }
+        const projects = JSON.parse(fs.readFileSync(projectsPath, 'utf8'));
+        const boards = projects.TRELLO_BOARDS || {};
+        let hasUpdated = false;
+        const nowStr = new Date().toISOString();
+        const isPeek = args[1] === 'peek';
+
+        for (const boardUrl of Object.keys(boards)) {
+            const boardConfig = boards[boardUrl];
+            const key = boardConfig.TRELLO_KEY || projects.TRELLO_KEY;
+            const token = boardConfig.TRELLO_TOKEN || projects.TRELLO_TOKEN;
+            if (!key || !token) continue;
+
+            let bId = boardUrl;
+            if(boardUrl.includes('/b/')) {
+                const match = boardUrl.match(/\/b\/([^\/]+)/);
+                if(match) bId = match[1];
+            }
+
+            const inboxName = boardConfig.TRELLO_LIST_INCOMING || 'Incoming Tickets';
+            
+            const boardApiRequest = (method, urlPath, payload = null) => {
+                return new Promise((resolve, reject) => {
+                    const querySymbol = urlPath.includes('?') ? '&' : '?';
+                    const fullPath = `/1${urlPath}${querySymbol}key=${key}&token=${token}`;
+                    const options = {
+                        hostname: 'api.trello.com',
+                        port: 443,
+                        path: fullPath,
+                        method: method,
+                        headers: { 'Content-Type': 'application/json' }
+                    };
+                    const req = https.request(options, (res) => {
+                        let data = '';
+                        res.on('data', chunk => data += chunk);
+                        res.on('end', () => {
+                            if(res.statusCode >= 200 && res.statusCode < 300) {
+                                try { resolve(JSON.parse(data)); } catch (e) { resolve(data); }
+                            } else { reject(`Error (${res.statusCode}): ${data}`); }
+                        });
+                    });
+                    req.on('error', (e) => reject(e));
+                    if(payload) req.write(JSON.stringify(payload));
+                    req.end();
+                });
+            };
+
+            const lists = await boardApiRequest('GET', `/boards/${bId}/lists`);
+            const inboxList = lists.find(l => l.name.toLowerCase().includes(inboxName.toLowerCase()));
+            if (!inboxList) {
+                console.log(`\nBoard: ${boardUrl}\n  List "${inboxName}" not found.`);
+                continue;
+            }
+
+            const cards = await boardApiRequest('GET', `/lists/${inboxList.id}/cards`);
+            const lastChecked = boardConfig.LAST_CHECKED;
+            const newCards = [];
+
+            for (const card of cards) {
+                const cardTime = parseInt(card.id.substring(0, 8), 16) * 1000;
+                if (!lastChecked || cardTime > new Date(lastChecked).getTime()) {
+                    newCards.push(card);
+                }
+            }
+
+            console.log(`\nBoard: ${boardUrl}`);
+            if (newCards.length === 0) {
+                console.log('  No new tickets.');
+            } else {
+                console.log(`  \x1b[36m${newCards.length} new ticket(s) found:\x1b[0m`);
+                newCards.forEach(card => {
+                    console.log(`  \x1b[34m🔵\x1b[0m [${card.shortLink}] ${card.name}`);
+                });
+                boardConfig.LAST_CHECKED = nowStr;
+                hasUpdated = true;
+            }
+        }
+
+        if (hasUpdated && !isPeek) {
+            fs.writeFileSync(projectsPath, JSON.stringify(projects, null, '\t').replace(/": /g, '":') + '\n', 'utf8');
+            console.log('\nLAST_CHECKED timestamps updated in projects.json.');
+        } else if (hasUpdated && isPeek) {
+            console.log('\nPeek mode: LAST_CHECKED timestamps were not updated.');
+        }
+    } catch (error) {
+        console.error('Error checking new tickets:', error);
     }
 }
 
@@ -908,6 +1005,9 @@ else if(command === 'listen') {
     const interval = parseInt(args[1]) || 5;
     listenInbox(interval);
 }
+else if(command === 'news' || command === 'unread') {
+    showNewTickets();
+}
 else {
-    console.log('Unknown command. Available: list, add, move, start, archive, delete, label, comment, check, check-done, search, complete, backup, sort, inbox, listen, sync');
+    console.log('Unknown command. Available: list, add, move, start, archive, delete, label, comment, check, check-done, search, complete, backup, sort, inbox, listen, sync, news');
 }

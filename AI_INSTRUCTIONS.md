@@ -4,7 +4,7 @@ This file provides context and strict rules for AI agents and LLMs (such as Gemi
 
 ## 1. Project Overview & Architecture
 This repository contains a lightweight, zero-dependency Node.js tool to control Trello boards via CLI or daemon.
-- `controller.js`: Main CLI tool. Loads dynamic configuration from `projects.json` (matching `process.cwd()` against `folder_path` defined in board-specific `PROJECTS` objects, or via `TRELLO_BOARD_CONTEXT` env variable) and board settings from `controller.json`.
+- `controller.js`: Main CLI tool. Loads dynamic configuration from `projects.json` (matching `process.cwd()` against `folder_path` defined in board-specific `LOCAL_PROJECTS` objects, or via `TRELLO_BOARD_CONTEXT` env variable) and board settings from `controller.json`.
 - `global_runner.js`: The background daemon script. Iterates through all registered Trello board URLs in `projects.json` and runs `sync` followed by `inbox`.
 - `run_silent.vbs`: Stealth starter for Windows Task Scheduler.
 
@@ -45,6 +45,7 @@ AI agents should use these commands to manage cards, track sessions, and maintai
 | `check-done` | `node .agents/trello/controller.js check-done [shortLink] "[itemName]"` | Mark a checklist item as completed. |
 | `backup` | `node .agents/trello/controller.js backup` | Export board state to `board_backup.txt`. |
 | `sort` | `node .agents/trello/controller.js sort` | Sort cards in lists based on priorities. |
+| `news` | `node .agents/trello/controller.js news [peek]` | Show new/unread tickets across all boards. Use `peek` to list without updating the LAST_CHECKED timestamp. |
 
 ## 5. AI Session & Billing Workflow Guidelines
 When you, the AI agent, are working on a ticket, you must strictly follow this workflow to document and log your sessions:

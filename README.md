@@ -77,25 +77,28 @@ This ensures zero configuration overhead per workspace.
 1. Create a `projects.json` file based on `projects.example.json`:
    ```json
    {
-     "https://trello.com/b/board_id/board_name": {
-       "TRELLO_KEY": "your_trello_api_key",
-       "TRELLO_TOKEN": "your_trello_member_token",
-       "TRELLO_BOARD_EMAIL": "your_board_email@boards.trello.com",
-       "TRELLO_LIST_INCOMING": "Incoming Tickets",
-       "TRELLO_LIST_ACTIVE": "Active Tickets",
-       "TRELLO_LIST_COMPLETED": "Completed Tickets",
-       "PROJECTS": [
-         {
-           "name": "Project A",
-           "folder_path": "C:/path/to/your/project-a",
-           "billing_path": "C:/path/to/billing-log-a.md"
-         },
-         {
-           "name": "Project B",
-           "folder_path": "C:/path/to/your/project-b",
-           "billing_path": "C:/path/to/billing-log-b.md"
-         }
-       ]
+     "TRELLO_KEY": "your_trello_api_key",
+     "TRELLO_TOKEN": "your_trello_member_token",
+     "TRELLO_BOARDS": {
+       "https://trello.com/b/board_id/board_name": {
+         "TRELLO_BOARD_EMAIL": "your_board_email@boards.trello.com",
+         "TRELLO_LIST_INCOMING": "Incoming Tickets",
+         "TRELLO_LIST_ACTIVE": "Active Tickets",
+         "TRELLO_LIST_COMPLETED": "Completed Tickets",
+         "LOCAL_PROJECTS": [
+           {
+             "name": "Project A",
+             "folder_path": "C:/path/to/your/project-a",
+             "billing_path": "C:/path/to/billing-log-a.md"
+           },
+           {
+             "name": "Project B",
+             "folder_path": "C:/path/to/your/project-b",
+             "billing_path": "C:/path/to/billing-log-b.md"
+           }
+         ],
+         "LAST_CHECKED": ""
+       }
      }
    }
    ```
@@ -131,6 +134,11 @@ node /path/to/trello-controller-daemon/controller.js add "Release v1.0" "[BUG] B
 
 # Move a card to a different list
 node /path/to/trello-controller-daemon/controller.js move "shortLink" "Active Tickets"
+
+# Show new/unread incoming tickets across all registered boards
+# Use "news peek" to view them without marking them as read (updating last_checked)
+node /path/to/trello-controller-daemon/controller.js news
+node /path/to/trello-controller-daemon/controller.js news peek
 ```
 
 ### Session Tracking & Billing Workflow

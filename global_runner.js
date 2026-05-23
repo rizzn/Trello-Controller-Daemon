@@ -19,14 +19,15 @@ if(!fs.existsSync(projectsPath)) {
 
 try {
 	const projects=JSON.parse(fs.readFileSync(projectsPath,'utf8'));
-	const boardUrls=Object.keys(projects);
+	const boards=projects.TRELLO_BOARDS||{};
+	const boardUrls=Object.keys(boards);
 	log(`Starting Trello inbox processing for ${boardUrls.length} board(s)...`);
 
 	for(const boardUrl of boardUrls) {
-		const boardConfig=projects[boardUrl];
+		const boardConfig=boards[boardUrl];
 		let boardDisplayName=boardUrl;
-		if(boardConfig.PROJECTS&&Array.isArray(boardConfig.PROJECTS)&&boardConfig.PROJECTS.length>0) {
-			const projectNames=boardConfig.PROJECTS.map(p=>p.name).filter(Boolean);
+		if(boardConfig.LOCAL_PROJECTS&&Array.isArray(boardConfig.LOCAL_PROJECTS)&&boardConfig.LOCAL_PROJECTS.length>0) {
+			const projectNames=boardConfig.LOCAL_PROJECTS.map(p=>p.name).filter(Boolean);
 			if(projectNames.length>0) {
 				boardDisplayName=`${boardUrl} (${projectNames.join(', ')})`;
 			}
@@ -36,8 +37,8 @@ try {
 		// If there are projects, use the first one's folder_path as cwd so that billing logs can be saved in the right workspace
 		// Otherwise, run in the script's directory (daemon context)
 		let runCwd=__dirname;
-		if(boardConfig.PROJECTS&&Array.isArray(boardConfig.PROJECTS)&&boardConfig.PROJECTS.length>0) {
-			const firstProject=boardConfig.PROJECTS[0];
+		if(boardConfig.LOCAL_PROJECTS&&Array.isArray(boardConfig.LOCAL_PROJECTS)&&boardConfig.LOCAL_PROJECTS.length>0) {
+			const firstProject=boardConfig.LOCAL_PROJECTS[0];
 			if(firstProject&&firstProject.folder_path) {
 				const folder=firstProject.folder_path;
 				if(fs.existsSync(folder)) {
