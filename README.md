@@ -59,14 +59,17 @@ This ensures zero configuration overhead per workspace.
 1. Create a `projects.json` file based on `projects.example.json`:
    ```json
    {
-     "C:/path/to/your/project-a": {
+     "https://trello.com/b/board_id/board_name": {
        "TRELLO_KEY": "your_trello_api_key",
        "TRELLO_TOKEN": "your_trello_member_token",
-       "TRELLO_BOARD_URL": "https://trello.com/b/board_id/board_name",
        "TRELLO_BOARD_EMAIL": "your_board_email@boards.trello.com",
        "TRELLO_LIST_INCOMING": "Incoming Tickets",
        "TRELLO_LIST_ACTIVE": "Active Tickets",
        "TRELLO_LIST_COMPLETED": "Completed Tickets",
+       "PROJECT_FOLDERS": [
+         "C:/path/to/your/project-a",
+         "C:/path/to/your/project-b"
+       ],
        "BILLING_LOG_FILE": "C:/path/to/billing-log.md"
      }
    }

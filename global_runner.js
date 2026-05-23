@@ -19,20 +19,31 @@ if(!fs.existsSync(projectsPath)) {
 
 try {
 	const projects=JSON.parse(fs.readFileSync(projectsPath,'utf8'));
-	const projectPaths=Object.keys(projects);
-	log(`Starting Trello inbox processing for ${projectPaths.length} project(s)...`);
+	const boardUrls=Object.keys(projects);
+	log(`Starting Trello inbox processing for ${boardUrls.length} board(s)...`);
 
-	for(const projectPath of projectPaths) {
-		if(!fs.existsSync(projectPath)) {
-			log(`Warning: Project path does not exist: ${projectPath}`);
-			continue;
-		}
+	for(const boardUrl of boardUrls) {
+		const boardConfig=projects[boardUrl];
+		log(`Processing board: ${boardUrl}...`);
 		
-		log(`Processing project: ${path.basename(projectPath)}...`);
+		// If there are project folders, use the first one as cwd so that billing logs can be saved in the right workspace
+		// Otherwise, run in the script's directory (daemon context)
+		let runCwd=__dirname;
+		if(boardConfig.PROJECT_FOLDERS&&Array.isArray(boardConfig.PROJECT_FOLDERS)&&boardConfig.PROJECT_FOLDERS.length>0) {
+			const firstFolder=boardConfig.PROJECT_FOLDERS[0];
+			if(fs.existsSync(firstFolder)) {
+				runCwd=firstFolder;
+			}
+		}
+
 		try {
 			// 1. Synchronize board labels and existing cards
 			const syncOutput=execSync(`node .agents/trello/controller.js sync`,{
-				cwd:projectPath,
+				cwd:runCwd,
+				env:{
+					...process.env,
+					TRELLO_BOARD_CONTEXT:boardUrl
+				},
 				encoding:'utf8',
 				stdio:'pipe'
 			});
@@ -40,17 +51,21 @@ try {
 
 			// 2. Process inbox
 			const inboxOutput=execSync(`node .agents/trello/controller.js inbox`,{
-				cwd:projectPath,
+				cwd:runCwd,
+				env:{
+					...process.env,
+					TRELLO_BOARD_CONTEXT:boardUrl
+				},
 				encoding:'utf8',
 				stdio:'pipe'
 			});
 			log(`Inbox result:\n${inboxOutput.trim()}`);
 		}
 		catch(error) {
-			log(`Error processing project ${path.basename(projectPath)}:\n${error.stdout||error.message}`);
+			log(`Error processing board ${boardUrl}:\n${error.stdout||error.message}`);
 		}
 	}
-	log('All projects processed.');
+	log('All boards processed.');
 }
 catch(e) {
 	log(`Critical error in global runner: ${e.message}`);

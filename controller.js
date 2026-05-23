@@ -10,11 +10,30 @@ if(fs.existsSync(projectsPath)) {
 	try {
 		const projects=JSON.parse(fs.readFileSync(projectsPath,'utf8'));
 		const currentPath=process.cwd().replace(/\\/g,'/').toLowerCase();
+		const boardContext=process.env.TRELLO_BOARD_CONTEXT;
 		
-		// Find the matching project entry (case-insensitive path comparison)
-		const matchedKey=Object.keys(projects).find(k=>k.replace(/\\/g,'/').toLowerCase()===currentPath);
+		let matchedKey;
+		if(boardContext) {
+			// Find config directly by board URL/key
+			matchedKey=Object.keys(projects).find(k=>k.toLowerCase()===boardContext.toLowerCase()||k.includes(boardContext));
+		}
+		
+		if(!matchedKey) {
+			// Find by matching current folder inside PROJECT_FOLDERS
+			matchedKey=Object.keys(projects).find(k=>{
+				const boardConfig=projects[k];
+				if(boardConfig.PROJECT_FOLDERS&&Array.isArray(boardConfig.PROJECT_FOLDERS)) {
+					return boardConfig.PROJECT_FOLDERS.some(folder=>folder.replace(/\\/g,'/').toLowerCase()===currentPath);
+				}
+				return false;
+			});
+		}
+
 		if(matchedKey) {
 			config=projects[matchedKey];
+			if(!config.TRELLO_BOARD_URL) {
+				config.TRELLO_BOARD_URL=matchedKey;
+			}
 		}
 	}
 	catch(e) {

@@ -4,8 +4,8 @@ This file provides context and strict rules for AI agents and LLMs (such as Gemi
 
 ## 1. Project Overview & Architecture
 This repository contains a lightweight, zero-dependency Node.js tool to control Trello boards via CLI or daemon.
-- `controller.js`: Main CLI tool. Loads dynamic configuration based on `process.cwd()` from `projects.json` and board settings from `controller.json`.
-- `global_runner.js`: The background daemon script. Iterates through all registered projects in `projects.json` and runs `sync` followed by `inbox`.
+- `controller.js`: Main CLI tool. Loads dynamic configuration from `projects.json` (matching `process.cwd()` against board-specific `PROJECT_FOLDERS`, or via `TRELLO_BOARD_CONTEXT` env variable) and board settings from `controller.json`.
+- `global_runner.js`: The background daemon script. Iterates through all registered Trello board URLs in `projects.json` and runs `sync` followed by `inbox`.
 - `run_silent.vbs`: Stealth starter for Windows Task Scheduler.
 
 ### Board List Requirements
