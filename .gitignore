@@ -4,6 +4,7 @@ projects.json
 # Local log files and backups
 runner.log
 board_backup.txt
+logo.psd
 
 # OS system files
 .DS_Store

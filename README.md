@@ -1,12 +1,13 @@
 <p align="center">
-  <img src="logo.jpg" alt="Trello Controller Daemon Logo" width="500">
+  <img src="logo.png" alt="Trello Controller Daemon Logo" width="500">
 </p>
 
 <p align="center">
-  <a href="https://github.com/rizzn/Trello-Controller-Daemon"><img src="https://img.shields.io/github/license/rizzn/Trello-Controller-Daemon" alt="License"></a>
-  <a href="https://github.com/rizzn/Trello-Controller-Daemon"><img src="https://img.shields.io/github/repo-size/rizzn/Trello-Controller-Daemon" alt="Repo Size"></a>
-  <a href="https://github.com/rizzn/Trello-Controller-Daemon"><img src="https://img.shields.io/github/stars/rizzn/Trello-Controller-Daemon?style=flat-square" alt="Stars"></a>
-  <a href="https://github.com/rizzn/Trello-Controller-Daemon"><img src="https://img.shields.io/github/issues/rizzn/Trello-Controller-Daemon" alt="Issues"></a>
+  <img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT License">
+  <img src="https://img.shields.io/badge/Language-JavaScript-F7DF1E?logo=javascript&logoColor=black" alt="JavaScript">
+  <img src="https://img.shields.io/badge/Platform-Node.js-339933?logo=node.js&logoColor=white" alt="Node.js">
+  <img src="https://img.shields.io/badge/Workflow-Agent%20Driven-7F187F" alt="Agent Driven">
+  <img src="https://img.shields.io/badge/Dependencies-Lightweight-brightgreen" alt="Lightweight">
 </p>
 
 # Trello Controller Daemon
@@ -14,6 +15,23 @@
 A lightweight, configuration-driven command-line interface (CLI) and background daemon runner for managing and automating multiple Trello boards, featuring built-in session tracking and billing logging.
 
 Built completely in native Node.js without heavy external dependencies.
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation & Folder Structure](#installation--folder-structure)
+  - [1. Global Folder Setup](#1-global-folder-setup)
+  - [2. Local Project Symlink](#2-local-project-symlink)
+- [Requirements & Dependencies](#requirements--dependencies)
+- [Configuration](#configuration)
+  - [Board List Requirements](#board-list-requirements)
+- [Usage & Commands](#usage--commands)
+- [Session Tracking & Billing Workflow](#session-tracking--billing-workflow)
+  - [Step 1: Start a Session](#step-1-start-a-session)
+  - [Step 2: Complete the Session](#step-2-complete-the-session)
+  - [Working on Multiple Tickets in One Session](#working-on-multiple-tickets-in-one-session)
+- [AI Agent & IDE Environment Integration](#ai-agent--ide-environment-integration)
+- [Running as a Background Daemon](#running-as-a-background-daemon)
 
 ## Features
 
@@ -112,7 +130,7 @@ node /path/to/trello-controller-daemon/controller.js sync
 node /path/to/trello-controller-daemon/controller.js add "Release v1.0" "[BUG] Button is not working on mobile"
 
 # Move a card to a different list
-node /path/to/trello-controller-daemon/controller.js move "shortLink" "Working on"
+node /path/to/trello-controller-daemon/controller.js move "shortLink" "Active Tickets"
 ```
 
 ### Session Tracking & Billing Workflow
@@ -126,7 +144,7 @@ Before starting your work, add an active session row to the session table in you
 |---|---|---|---|---|---|
 | 05/23/2026 | 14:15 | *Active* | | | In Progress (Ticket Name) |
 ```
-Then, tell the controller to start the card (moves it to "Working on" and posts a start comment):
+Then, tell the controller to start the card (moves it to "Active Tickets" and posts a start comment):
 ```bash
 node /path/to/trello-controller-daemon/controller.js start "shortLink"
 ```
@@ -158,7 +176,7 @@ This tool is designed to seamlessly integrate with modern **AI Coding Environmen
 #### How the Agent Handles the Controller:
 1. **Task Ingestion:** When the agent starts, it runs `node .agents/trello/controller.js list` or reads the board configuration to find the next ticket.
 2. **Autonomous Activation:** The agent executes the `start [shortLink]` command, which:
-   - Moves the card to "Working on" on Trello.
+   - Moves the card to "Active Tickets" on Trello.
    - Automatically writes a clean, detailed task context file named `active_ticket.json` to the workspace root.
    - Adds an active time-tracking entry into the project's local billing log.
 3. **Specification Parsing:** The agent reads `active_ticket.json` to get the full Trello card title, description, checklist items, and labels. The agent now has all the context it needs to write, debug, and test code for that ticket without human intervention.
