@@ -72,8 +72,8 @@ This ensures zero configuration overhead per workspace.
 ### Board List Requirements
 To ensure the automated workflows function correctly, your Trello board must contain:
 - **Inbox List:** Configured via `TRELLO_INBOX_LIST` in `projects.json` (defaults to `"Incoming Tickets"` if not set).
-- **Active Work List:** Configured via `TRELLO_ACTIVE_LIST` in `projects.json` (defaults to `"Working on"` if not set).
-- **Completed List:** Configured via `TRELLO_COMPLETED_LIST` in `projects.json` (defaults to `"Implemented"`). If the specified list is not found, the controller falls back to checking list names containing `"implemented"`, `"completed"`, `"complete"`, or `"done"`.
+- **Active Work List:** Configured via `TRELLO_ACTIVE_LIST` in `projects.json` (defaults to `"Active Tickets"` if not set).
+- **Completed List:** Configured via `TRELLO_COMPLETED_LIST` in `projects.json` (defaults to `"Completed Tickets"`). If the specified list is not found, the controller falls back to checking list names containing `"implemented"`, `"completed"`, `"complete"`, or `"done"`.
 
 ## Usage
 
