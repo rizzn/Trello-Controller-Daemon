@@ -50,7 +50,7 @@ AI agents should use these commands to manage cards, track sessions, and maintai
 When you, the AI agent, are working on a ticket, you must strictly follow this workflow to document and log your sessions:
 
 1. **Start of Work:**
-   - Locate the path defined under `BILLING_LOG_FILE` in the project's config.
+   - Locate the path defined under `billing_path` inside the matching project object in central `projects.json`.
    - Open that Markdown file and insert an active session row into the sessions table:
      `| [Date] | [StartTime] | *Aktiv* | | | In Arbeit ([Ticket Title]) |`
    - Run the Trello start command:

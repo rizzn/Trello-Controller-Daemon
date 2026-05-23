@@ -66,11 +66,16 @@ This ensures zero configuration overhead per workspace.
        "TRELLO_LIST_INCOMING": "Incoming Tickets",
        "TRELLO_LIST_ACTIVE": "Active Tickets",
        "TRELLO_LIST_COMPLETED": "Completed Tickets",
-       "PROJECT_FOLDERS": [
-         "C:/path/to/your/project-a",
-         "C:/path/to/your/project-b"
-       ],
-       "BILLING_LOG_FILE": "C:/path/to/billing-log.md"
+       "PROJECTS": [
+         {
+           "folder_path": "C:/path/to/your/project-a",
+           "billing_path": "C:/path/to/billing-log-a.md"
+         },
+         {
+           "folder_path": "C:/path/to/your/project-b",
+           "billing_path": "C:/path/to/billing-log-b.md"
+         }
+       ]
      }
    }
    ```
@@ -110,7 +115,7 @@ node /path/to/trello-controller-daemon/controller.js move "shortLink" "Working o
 
 ### Session Tracking & Billing Workflow
 
-This tool includes an automated session calculator and billing logger that operates on a markdown logbook file (defined in `BILLING_LOG_FILE`).
+This tool includes an automated session calculator and billing logger that operates on a markdown logbook file (defined via `billing_path` inside the project's config block).
 
 #### Step 1: Start a Session
 Before starting your work, add an active session row to the session table in your markdown billing log:

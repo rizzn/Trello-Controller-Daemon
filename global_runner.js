@@ -26,13 +26,16 @@ try {
 		const boardConfig=projects[boardUrl];
 		log(`Processing board: ${boardUrl}...`);
 		
-		// If there are project folders, use the first one as cwd so that billing logs can be saved in the right workspace
+		// If there are projects, use the first one's folder_path as cwd so that billing logs can be saved in the right workspace
 		// Otherwise, run in the script's directory (daemon context)
 		let runCwd=__dirname;
-		if(boardConfig.PROJECT_FOLDERS&&Array.isArray(boardConfig.PROJECT_FOLDERS)&&boardConfig.PROJECT_FOLDERS.length>0) {
-			const firstFolder=boardConfig.PROJECT_FOLDERS[0];
-			if(fs.existsSync(firstFolder)) {
-				runCwd=firstFolder;
+		if(boardConfig.PROJECTS&&Array.isArray(boardConfig.PROJECTS)&&boardConfig.PROJECTS.length>0) {
+			const firstProject=boardConfig.PROJECTS[0];
+			if(firstProject&&firstProject.folder_path) {
+				const folder=firstProject.folder_path;
+				if(fs.existsSync(folder)) {
+					runCwd=folder;
+				}
 			}
 		}
 

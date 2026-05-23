@@ -6,10 +6,15 @@
 		"TRELLO_LIST_INCOMING":"Incoming Tickets",
 		"TRELLO_LIST_ACTIVE":"Active Tickets",
 		"TRELLO_LIST_COMPLETED":"Completed Tickets",
-		"PROJECT_FOLDERS":[
-			"C:/path/to/your/project-a",
-			"C:/path/to/your/project-b"
-		],
-		"BILLING_LOG_FILE":"C:/path/to/billing-log.md"
+		"PROJECTS":[
+			{
+				"folder_path":"C:/path/to/your/project-a",
+				"billing_path":"C:/path/to/billing-log-a.md"
+			},
+			{
+				"folder_path":"C:/path/to/your/project-b",
+				"billing_path":"C:/path/to/billing-log-b.md"
+			}
+		]
 	}
 }

@@ -13,26 +13,42 @@ if(fs.existsSync(projectsPath)) {
 		const boardContext=process.env.TRELLO_BOARD_CONTEXT;
 		
 		let matchedKey;
+		let matchedProject;
+		
 		if(boardContext) {
 			// Find config directly by board URL/key
 			matchedKey=Object.keys(projects).find(k=>k.toLowerCase()===boardContext.toLowerCase()||k.includes(boardContext));
+			if(matchedKey) {
+				const boardConfig=projects[matchedKey];
+				// See if the current directory matches any project under this board to resolve billing path
+				if(boardConfig.PROJECTS&&Array.isArray(boardConfig.PROJECTS)) {
+					matchedProject=boardConfig.PROJECTS.find(p=>p.folder_path&&p.folder_path.replace(/\\/g,'/').toLowerCase()===currentPath);
+					if(!matchedProject&&boardConfig.PROJECTS.length>0) {
+						matchedProject=boardConfig.PROJECTS[0];
+					}
+				}
+			}
 		}
 		
 		if(!matchedKey) {
-			// Find by matching current folder inside PROJECT_FOLDERS
+			// Find by matching current folder inside PROJECTS
 			matchedKey=Object.keys(projects).find(k=>{
 				const boardConfig=projects[k];
-				if(boardConfig.PROJECT_FOLDERS&&Array.isArray(boardConfig.PROJECT_FOLDERS)) {
-					return boardConfig.PROJECT_FOLDERS.some(folder=>folder.replace(/\\/g,'/').toLowerCase()===currentPath);
+				if(boardConfig.PROJECTS&&Array.isArray(boardConfig.PROJECTS)) {
+					matchedProject=boardConfig.PROJECTS.find(p=>p.folder_path&&p.folder_path.replace(/\\/g,'/').toLowerCase()===currentPath);
+					return !!matchedProject;
 				}
 				return false;
 			});
 		}
 
 		if(matchedKey) {
-			config=projects[matchedKey];
+			config=JSON.parse(JSON.stringify(projects[matchedKey]));
 			if(!config.TRELLO_BOARD_URL) {
 				config.TRELLO_BOARD_URL=matchedKey;
+			}
+			if(matchedProject) {
+				config.BILLING_LOG_FILE=matchedProject.billing_path;
 			}
 		}
 	}
