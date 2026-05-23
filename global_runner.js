@@ -24,7 +24,14 @@ try {
 
 	for(const boardUrl of boardUrls) {
 		const boardConfig=projects[boardUrl];
-		log(`Processing board: ${boardUrl}...`);
+		let boardDisplayName=boardUrl;
+		if(boardConfig.PROJECTS&&Array.isArray(boardConfig.PROJECTS)&&boardConfig.PROJECTS.length>0) {
+			const projectNames=boardConfig.PROJECTS.map(p=>p.name).filter(Boolean);
+			if(projectNames.length>0) {
+				boardDisplayName=`${boardUrl} (${projectNames.join(', ')})`;
+			}
+		}
+		log(`Processing board: ${boardDisplayName}...`);
 		
 		// If there are projects, use the first one's folder_path as cwd so that billing logs can be saved in the right workspace
 		// Otherwise, run in the script's directory (daemon context)

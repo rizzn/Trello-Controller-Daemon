@@ -68,10 +68,12 @@ This ensures zero configuration overhead per workspace.
        "TRELLO_LIST_COMPLETED": "Completed Tickets",
        "PROJECTS": [
          {
+           "name": "Project A",
            "folder_path": "C:/path/to/your/project-a",
            "billing_path": "C:/path/to/billing-log-a.md"
          },
          {
+           "name": "Project B",
            "folder_path": "C:/path/to/your/project-b",
            "billing_path": "C:/path/to/billing-log-b.md"
          }
