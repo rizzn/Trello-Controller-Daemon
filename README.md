@@ -126,11 +126,10 @@ When done, complete the session by specifying the card's shortLink and a manual 
 node /path/to/trello-controller-daemon/controller.js complete "shortLink" "1h 30m"
 ```
 The controller will automatically:
-1. Move the card to the **"Implemented"** or **"Done"** list on your board (completed tickets are moved here to keep them visible rather than archiving them).
-2. Locate the `*Aktiv*` or `In Arbeit` row in your markdown logbook.
-3. Calculate the actual elapsed time.
-4. Replace `*Aktiv*` with the current time and update the duration fields.
-5. Append a consumer-ready billing item block at the bottom of your logbook including details, customer benefits, and efficiency comparisons.
+1. Move the card to the **"Completed Tickets"** list (or the list configured in `TRELLO_LIST_COMPLETED`).
+2. Locate the active session row (`*Aktiv*` or `In Arbeit`) in the logbook.
+3. Calculate the actual elapsed time and update the session row with the end time, actual duration, and estimate.
+4. Generate a consumer-ready billing item block and append it to the logbook.
 
 #### Working on Multiple Tickets in One Session
 If your session covers multiple tickets:

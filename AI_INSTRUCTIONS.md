@@ -58,11 +58,11 @@ When you, the AI agent, are working on a ticket, you must strictly follow this w
    - **Multiple Tickets:** If working on multiple tickets in one session, list them all in the description column (e.g. `In Arbeit (Ticket A & Ticket B)`) and run the `start` command for each of them.
 
 2. **End of Work / Completion:**
-   - Completed cards on Trello are moved to the list containing `"Implemented"` or `"Done"`. They are **never** archived automatically by this command.
+   - Completed cards on Trello are moved to the **"Completed Tickets"** list (or the list configured in `TRELLO_LIST_COMPLETED`). They are **never** archived automatically by this command.
    - Run the `complete` command for the **primary ticket** first:
      `node .agents/trello/controller.js complete [primaryShortLink] "[EstimatedHumanTime]"`
      This will close the active session row in the markdown file and generate the billing line item block.
    - Run the `complete` command for any **remaining tickets** associated with the same session:
      `node .agents/trello/controller.js complete [otherShortLink]`
-     This moves those cards to "Implemented" on Trello. Since the first call already closed the active session row, subsequent calls will complete without duplicating logbook entries.
+     This moves those cards to the **"Completed Tickets"** list on Trello. Since the first call already closed the active session row, subsequent calls will complete without duplicating logbook entries.
    - Ensure the generated billing line item matches the formatting rules specified in the project's `billing-rules.md` (e.g., German language, clear customer value, no technical jargon).
