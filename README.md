@@ -151,18 +151,25 @@ If your session covers multiple tickets:
    - Run `complete` on the **first ticket** first. This closes the active session in the logbook and generates the billing block.
    - Run `complete` on the **remaining tickets**. Since there is no longer an active session in the log, the controller will move them to "Completed Tickets" on Trello without creating duplicate log entries or messing up the logbook.
 
-### AI Agent Integration & `active_ticket.json`
+### AI Agent & IDE Environment Integration
 
-This tool serves as a **context provider** for AI Assistants and IDE Agents (like Cursor, Gemini, Cline, or Copilot). 
+This tool is designed to seamlessly integrate with modern **AI Coding Environments** and IDE Agents (such as Gemini, Antigravity, Cline, Cursor, Roo-Code, or GitHub Copilot). It bridges the gap between task management (Trello) and code execution, allowing the AI agent to operate the system **fully autonomously**.
 
-When you run the `start` command:
-1. The controller fetches the Trello card's full details (Title, Description, Labels, and Checklist Items).
-2. It writes a temporary file named `active_ticket.json` directly into your workspace root.
-3. Any AI Agent scanning the workspace instantly reads this file to understand its exact task, specification, and acceptance criteria without manual copy-pasting.
+#### How the Agent Handles the Controller:
+1. **Task Ingestion:** When the agent starts, it runs `node .agents/trello/controller.js list` or reads the board configuration to find the next ticket.
+2. **Autonomous Activation:** The agent executes the `start [shortLink]` command, which:
+   - Moves the card to "Working on" on Trello.
+   - Automatically writes a clean, detailed task context file named `active_ticket.json` to the workspace root.
+   - Adds an active time-tracking entry into the project's local billing log.
+3. **Specification Parsing:** The agent reads `active_ticket.json` to get the full Trello card title, description, checklist items, and labels. The agent now has all the context it needs to write, debug, and test code for that ticket without human intervention.
+4. **Interactive Checklists:** As the agent implements features, it checks off checklist items on Trello in real-time using `node .agents/trello/controller.js check-done [shortLink] "[itemName]"` to report progress.
+5. **Auto-Completion & Time Tracking:** Once the task is complete, the agent runs the `complete [shortLink] "[estTime]"` command. This:
+   - Moves the card to the completed list.
+   - Calculates the exact time elapsed during the session.
+   - Deletes `active_ticket.json`.
+   - Generates and appends a consumer-ready billing line item to the project's markdown billing log.
 
-#### Keeping check items in sync:
-* Adding checklist items (`check`) or marking them completed (`check-done`) automatically fetches the updated state from Trello and synchronizes it with the local `active_ticket.json`.
-* Completing the session (`complete`) automatically deletes the temporary `active_ticket.json` file from the workspace.
+This allows the agent to handle the entire lifecycle of a ticket fully automated, from start to completion and billing, with zero human overhead.
 
 #### Recommended `.gitignore`:
 To prevent tracking temporary workspace ticket context in your git commits, add `active_ticket.json` to your project's local `.gitignore` file:
