@@ -1,0 +1,10 @@
+# Private credentials and configuration
+projects.json
+
+# Local log files and backups
+runner.log
+board_backup.txt
+
+# OS system files
+.DS_Store
+Thumbs.db
