@@ -72,13 +72,14 @@ This ensures zero configuration overhead per workspace.
    }
    ```
 
-#### How to find your Trello Board Email (`TRELLO_BOARD_EMAIL`)
+2. Create a `controller.json` file based on your board labels, prefixes, and list priorities.
+
+#### How to find your Trello Board Email (`TRELLO_BOARD_EMAIL`):
 1. Open your Trello Board in your web browser.
 2. Open the Board Menu on the right (click **Show Menu** or `...` under your board header).
-3. Click **More** (or **Mehr** in German).
-4. Select **Email-to-board settings** (or **Einstellungen für E-Mail an Board**).
+3. Click **More**.
+4. Select **Email-to-board settings**.
 5. Copy your unique board email address shown there. You can also configure which list and card position new emails should go to (recommended: target your Incoming Tickets list).
-2. Create a `controller.json` file based on your board labels, prefixes, and list priorities.
 
 ### Board List Requirements
 To ensure the automated workflows function correctly, your Trello board must contain:
@@ -111,9 +112,9 @@ This tool includes an automated session calculator and billing logger that opera
 #### Step 1: Start a Session
 Before starting your work, add an active session row to the session table in your markdown billing log:
 ```markdown
-| Datum | Start | Ende | Tatsächlich | Geschätzt | Beschreibung |
+| Date | Start | End | Actual | Estimated | Description |
 |---|---|---|---|---|---|
-| 23.05.2026 | 14:15 | *Aktiv* | | | In Arbeit (Ticket-Name) |
+| 05/23/2026 | 14:15 | *Active* | | | In Progress (Ticket Name) |
 ```
 Then, tell the controller to start the card (moves it to "Working on" and posts a start comment):
 ```bash
@@ -127,18 +128,18 @@ node /path/to/trello-controller-daemon/controller.js complete "shortLink" "1h 30
 ```
 The controller will automatically:
 1. Move the card to the **"Completed Tickets"** list (or the list configured in `TRELLO_LIST_COMPLETED`).
-2. Locate the active session row (`*Aktiv*` or `In Arbeit`) in the logbook.
+2. Locate the active session row (`*Active*` or `In Progress`) in the logbook.
 3. Calculate the actual elapsed time and update the session row with the end time, actual duration, and estimate.
 4. Generate a consumer-ready billing item block and append it to the logbook.
 
 #### Working on Multiple Tickets in One Session
 If your session covers multiple tickets:
 1. List all tickets in the active session row description:
-   `| 23.05.2026 | 14:15 | *Aktiv* | | | In Arbeit (Ticket A & Ticket B) |`
+   `| 05/23/2026 | 14:15 | *Active* | | | In Progress (Ticket A & Ticket B) |`
 2. Start both cards on Trello using their respective shortLinks.
 3. When completing:
    - Run `complete` on the **first ticket** first. This closes the active session in the logbook and generates the billing block.
-   - Run `complete` on the **remaining tickets**. Since there is no longer an active session in the log, the controller will move them to "Implemented" on Trello without creating duplicate log entries or messing up the logbook.
+   - Run `complete` on the **remaining tickets**. Since there is no longer an active session in the log, the controller will move them to "Completed Tickets" on Trello without creating duplicate log entries or messing up the logbook.
 
 ### AI Agent Integration & `active_ticket.json`
 
