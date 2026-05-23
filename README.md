@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="Trello Controller Daemon Logo" width="500">
+  <img src="logo.png" alt="Trello Controller Daemon Logo" width="100%">
 </p>
 
 <p align="center">
