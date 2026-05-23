@@ -2,8 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 
-// 1. config.env aus dem lokalen Projekt-Verzeichnis einlesen
-// 1. Konfiguration aus der zentralen projects.json laden
+// 1. Load configuration from the central projects.json
 const projectsPath=path.join(__dirname,'projects.json');
 let config={};
 
@@ -12,14 +11,14 @@ if(fs.existsSync(projectsPath)) {
 		const projects=JSON.parse(fs.readFileSync(projectsPath,'utf8'));
 		const currentPath=process.cwd().replace(/\\/g,'/').toLowerCase();
 		
-		// Finde den passenden Eintrag (Case-insensitive Pfad-Vergleich)
+		// Find the matching project entry (case-insensitive path comparison)
 		const matchedKey=Object.keys(projects).find(k=>k.replace(/\\/g,'/').toLowerCase()===currentPath);
 		if(matchedKey) {
 			config=projects[matchedKey];
 		}
 	}
 	catch(e) {
-		console.error('Fehler beim Lesen der zentralen projects.json:',e.message);
+		console.error('Error reading central projects.json:',e.message);
 	}
 }
 
@@ -28,12 +27,12 @@ const TOKEN=config.TRELLO_TOKEN;
 let BOARD_URL=config.TRELLO_BOARD_URL;
 
 if(!KEY||!TOKEN||!BOARD_URL) {
-	console.error('Fehler: Dieses Projektverzeichnis ist nicht in E:\\.appdata\\.agents\\trello\\projects.json registriert oder es fehlen Konfigurationen.');
-	console.error(`Aktuelles Verzeichnis: ${process.cwd()}`);
+	console.error('Error: This project directory is not registered in E:\\.appdata\\.agents\\trello\\projects.json, or configuration values are missing.');
+	console.error(`Current directory: ${process.cwd()}`);
 	process.exit(1);
 }
 
-// Priority Order und Label Mappings aus globaler controller.json laden
+// Load priority order and label mappings from global controller.json
 const globalConfigPath=path.join(__dirname,'controller.json');
 let globalConfig={};
 if(fs.existsSync(globalConfigPath)) {
@@ -41,24 +40,24 @@ if(fs.existsSync(globalConfigPath)) {
 		globalConfig=JSON.parse(fs.readFileSync(globalConfigPath,'utf8'));
 	}
 	catch(e) {
-		console.error('Fehler beim Lesen der globalen controller.json:',e.message);
+		console.error('Error reading global controller.json:',e.message);
 	}
 }
 
 const priorityOrder=globalConfig.priorityOrder||['Important','Bug','Feature','UI/UX','Refactor','Controlling'];
 const labelMappings=globalConfig.labelMappings||[];
-const INBOX_LIST_NAME=config.TRELLO_INBOX_LIST||globalConfig.defaultInboxListName||'Incoming Tickets';
+const INBOX_LIST_NAME=config.TRELLO_INBOX_LIST||'Incoming Tickets';
 const ACTIVE_LIST_NAME=config.TRELLO_ACTIVE_LIST||'Active Tickets';
 const COMPLETED_LIST_NAME=config.TRELLO_COMPLETED_LIST||'Completed Tickets';
 
-// Board-ID aus der URL extrahieren falls nötig
+// Extract Board ID from Board URL if necessary
 let boardId = BOARD_URL;
 if(BOARD_URL.includes('/b/')) {
     const match = BOARD_URL.match(/\/b\/([^\/]+)/);
     if(match) boardId = match[1];
 }
 
-// Helper für HTTPS Requests
+// Helper for HTTPS requests
 function apiRequest(method, urlPath, payload = null) {
     return new Promise((resolve, reject) => {
         const querySymbol = urlPath.includes('?') ? '&' : '?';
@@ -86,7 +85,7 @@ function apiRequest(method, urlPath, payload = null) {
                     }
                 }
                 else {
-                    reject(`Trello-API Fehler (${res.statusCode}): ${data}`);
+                    reject(`Trello API Error (${res.statusCode}): ${data}`);
                 }
             });
         });
@@ -97,17 +96,17 @@ function apiRequest(method, urlPath, payload = null) {
     });
 }
 
-// Hauptfunktionen
+// Core functions
 async function showBoard() {
     try {
-        console.log('Rufe Trello-Board ab...');
+        console.log('Fetching Trello board...');
         const lists = await apiRequest('GET', `/boards/${boardId}/lists`);
         
         for (const list of lists) {
             console.log(`\n\x1b[36m=== List: ${list.name} (ID: ${list.id}) ===\x1b[0m`);
             const cards = await apiRequest('GET', `/lists/${list.id}/cards`);
             if(cards.length === 0) {
-                console.log('  (Keine Aufgaben)');
+                console.log('  (No tasks)');
             }
             else {
                 cards.forEach(card => {
@@ -158,7 +157,7 @@ function parsePrefixAndCleanTitle(title) {
 async function addCard(title, desc = '', listName = '') {
     try {
         const lists = await apiRequest('GET', `/boards/${boardId}/lists`);
-        if(lists.length === 0) throw 'Keine Listen auf dem Board gefunden!';
+        if(lists.length === 0) throw 'No lists found on the board!';
         
         let targetList = lists[0];
         if(listName) {
@@ -170,21 +169,21 @@ async function addCard(title, desc = '', listName = '') {
         const cleanTitle = parsed.cleanTitle;
         const matchedLabel = parsed.matchedLabel;
 
-        console.log(`Erstelle Karte in Liste "${targetList.name}"...`);
+        console.log(`Creating card in list "${targetList.name}"...`);
         const newCard = await apiRequest('POST', `/cards?idList=${targetList.id}`, {
             name: cleanTitle,
             desc: desc,
             pos: 'top'
         });
-        console.log(`\x1b[32mKarte erfolgreich erstellt! ID: [${newCard.shortLink}]\x1b[0m`);
+        console.log(`\x1b[32mCard successfully created! ID: [${newCard.shortLink}]\x1b[0m`);
         
         if (matchedLabel) {
-            console.log(`Füge Label "${matchedLabel.name}" (${matchedLabel.color}) hinzu...`);
+            console.log(`Adding label "${matchedLabel.name}" (${matchedLabel.color})...`);
             await apiRequest('POST', `/cards/${newCard.id}/labels?color=${matchedLabel.color}&name=${encodeURIComponent(matchedLabel.name)}`);
-            console.log('\x1b[32mLabel erfolgreich hinzugefügt!\x1b[0m');
+            console.log('\x1b[32mLabel successfully added!\x1b[0m');
         }
         
-        // await sortBoard(); // Automatische Sortierung deaktiviert
+        // await sortBoard(); // Automatic sorting disabled
     } catch (error) {
         console.error(error);
     }
@@ -194,13 +193,13 @@ async function moveCard(cardShortLink, targetListName) {
     try {
         const lists = await apiRequest('GET', `/boards/${boardId}/lists`);
         const targetList = lists.find(l => l.name.toLowerCase().includes(targetListName.toLowerCase()));
-        if(!targetList) throw `Liste "${targetListName}" nicht gefunden!`;
+        if(!targetList) throw `List "${targetListName}" not found!`;
         
         const card = await apiRequest('GET', `/cards/${cardShortLink}`);
         
-        console.log(`Bewege Karte [${cardShortLink}] "${card.name}" in die Liste "${targetList.name}"...`);
+        console.log(`Moving card [${cardShortLink}] "${card.name}" to list "${targetList.name}"...`);
         await apiRequest('PUT', `/cards/${card.id}?idList=${targetList.id}`);
-        console.log('\x1b[32mKarte erfolgreich verschoben!\x1b[0m');
+        console.log('\x1b[32mCard successfully moved!\x1b[0m');
     } catch (error) {
         console.error(error);
     }
@@ -221,11 +220,11 @@ async function syncLocalActiveTicket(card,checklists) {
 				}));
 				const jsonStr=JSON.stringify(activeTicket,null,'\t').replace(/": /g,'":');
 				fs.writeFileSync(activeTicketPath,jsonStr,'utf8');
-				console.log('Lokales active_ticket.json aktualisiert.');
+				console.log('Local active_ticket.json updated.');
 			}
 		}
 		catch(e) {
-			// Ignorieren
+			// Ignore
 		}
 	}
 }
@@ -234,25 +233,25 @@ async function startCard(cardShortLink) {
     try {
         const lists = await apiRequest('GET', `/boards/${boardId}/lists`);
         const targetList = lists.find(l => l.name.toLowerCase().includes(ACTIVE_LIST_NAME.toLowerCase()));
-        if(!targetList) throw `Liste "${ACTIVE_LIST_NAME}" nicht gefunden!`;
+        if(!targetList) throw `List "${ACTIVE_LIST_NAME}" not found!`;
         
         const card = await apiRequest('GET', `/cards/${cardShortLink}`);
         
-        // Bilder-Anhänge in Beschreibung einbetten falls vorhanden
+        // Embed image attachments into description if present
         await embedMissingImages(card);
         
-        console.log(`Bewege Karte [${cardShortLink}] "${card.name}" in die Liste "${targetList.name}"...`);
+        console.log(`Moving card [${cardShortLink}] "${card.name}" to list "${targetList.name}"...`);
         await apiRequest('PUT', `/cards/${card.id}?idList=${targetList.id}`);
         
         const timestamp = new Date().toLocaleString('de-DE');
-        const commentText = `Bearbeitung gestartet am ${timestamp}`;
-        console.log(`Füge Kommentar hinzu: "${commentText}"`);
+        const commentText = `Processing started at ${timestamp}`;
+        console.log(`Adding comment: "${commentText}"`);
         await apiRequest('POST', `/cards/${card.id}/actions/comments`, { text: commentText });
         
-        console.log('\x1b[32mKarte erfolgreich gestartet!\x1b[0m');
+        console.log('\x1b[32mCard successfully started!\x1b[0m');
         
-        // active_ticket.json erstellen für KI-Assistenten-Kontext
-        console.log('Rufe Checklisten für das Ticket ab...');
+        // Create active_ticket.json for AI assistant context
+        console.log('Retrieving checklists for the ticket...');
         const checklists = await apiRequest('GET', `/cards/${card.id}/checklists`);
         
         const activeTicket = {
@@ -274,9 +273,9 @@ async function startCard(cardShortLink) {
         
         const jsonStr = JSON.stringify(activeTicket, null, '\t').replace(/": /g, '":');
         fs.writeFileSync(path.join(process.cwd(), 'active_ticket.json'), jsonStr, 'utf8');
-        console.log('\x1b[32mactive_ticket.json erfolgreich im Workspace erstellt!\x1b[0m');
+        console.log('\x1b[32mactive_ticket.json successfully created in the workspace!\x1b[0m');
         
-        // await sortBoard(); // Automatische Sortierung deaktiviert
+        // await sortBoard(); // Automatic sorting disabled
     } catch (error) {
         console.error(error);
     }
@@ -285,9 +284,9 @@ async function startCard(cardShortLink) {
 async function archiveCard(cardShortLink) {
     try {
         const card = await apiRequest('GET', `/cards/${cardShortLink}`);
-        console.log(`Archiviere Karte [${cardShortLink}] "${card.name}"...`);
+        console.log(`Archiving card [${cardShortLink}] "${card.name}"...`);
         await apiRequest('PUT', `/cards/${card.id}?closed=true`);
-        console.log('\x1b[32mKarte erfolgreich archiviert!\x1b[0m');
+        console.log('\x1b[32mCard successfully archived!\x1b[0m');
     } catch (error) {
         console.error(error);
     }
@@ -296,9 +295,9 @@ async function archiveCard(cardShortLink) {
 async function deleteCard(cardShortLink) {
     try {
         const card = await apiRequest('GET', `/cards/${cardShortLink}`);
-        console.log(`Lösche Karte [${cardShortLink}] "${card.name}" endgültig...`);
+        console.log(`Deleting card [${cardShortLink}] "${card.name}" permanently...`);
         await apiRequest('DELETE', `/cards/${card.id}`);
-        console.log('\x1b[32mKarte erfolgreich gelöscht!\x1b[0m');
+        console.log('\x1b[32mCard successfully deleted!\x1b[0m');
     } catch (error) {
         console.error(error);
     }
@@ -307,9 +306,9 @@ async function deleteCard(cardShortLink) {
 async function addLabel(cardShortLink, color, name = '') {
     try {
         const card = await apiRequest('GET', `/cards/${cardShortLink}`);
-        console.log(`Füge Label "${color}" (${name || 'ohne Name'}) zu Karte [${cardShortLink}] hinzu...`);
+        console.log(`Adding label "${color}" (${name || 'no name'}) to card [${cardShortLink}]...`);
         await apiRequest('POST', `/cards/${card.id}/labels?color=${color}&name=${name}`);
-        console.log('\x1b[32mLabel erfolgreich hinzugefügt!\x1b[0m');
+        console.log('\x1b[32mLabel successfully added!\x1b[0m');
     } catch (error) {
         console.error(error);
     }
@@ -318,9 +317,9 @@ async function addLabel(cardShortLink, color, name = '') {
 async function addComment(cardShortLink, text) {
     try {
         const card = await apiRequest('GET', `/cards/${cardShortLink}`);
-        console.log(`Füge Kommentar zu Karte [${cardShortLink}] hinzu...`);
+        console.log(`Adding comment to card [${cardShortLink}]...`);
         await apiRequest('POST', `/cards/${card.id}/actions/comments`, { text: text });
-        console.log('\x1b[32mKommentar erfolgreich hinzugefügt!\x1b[0m');
+        console.log('\x1b[32mComment successfully added!\x1b[0m');
     } catch (error) {
         console.error(error);
     }
@@ -332,14 +331,14 @@ async function addCheckItem(cardShortLink, itemName) {
         const checklists = await apiRequest('GET', `/cards/${card.id}/checklists`);
         let checklist = checklists[0];
         if(!checklist) {
-            console.log('Erstelle neue Checkliste "Aufgaben"...');
-            checklist = await apiRequest('POST', `/cards/${card.id}/checklists`, { name: 'Aufgaben' });
+            console.log('Creating new checklist "Tasks"...');
+            checklist = await apiRequest('POST', `/cards/${card.id}/checklists`, { name: 'Tasks' });
         }
-        console.log(`Füge "${itemName}" zu Checkliste "${checklist.name}" hinzu...`);
+        console.log(`Adding "${itemName}" to checklist "${checklist.name}"...`);
         await apiRequest('POST', `/checklists/${checklist.id}/checkItems`, { name: itemName });
-        console.log('\x1b[32mChecklisten-Punkt erfolgreich hinzugefügt!\x1b[0m');
+        console.log('\x1b[32mChecklist item successfully added!\x1b[0m');
         
-        // Lokales active_ticket.json synchronisieren
+        // Sync local active_ticket.json
         const updatedChecklists = await apiRequest('GET', `/cards/${card.id}/checklists`);
         await syncLocalActiveTicket(card, updatedChecklists);
     } catch (error) {
@@ -359,12 +358,12 @@ async function completeCheckItem(cardShortLink, itemName) {
                 break;
             }
         }
-        if(!foundItem) throw `Checklisten-Punkt "${itemName}" nicht gefunden!`;
-        console.log(`Markiere "${foundItem.item.name}" als erledigt...`);
+        if(!foundItem) throw `Checklist item "${itemName}" not found!`;
+        console.log(`Marking "${foundItem.item.name}" as completed...`);
         await apiRequest('PUT', `/cards/${card.id}/checkItem/${foundItem.item.id}`, { state: 'complete' });
-        console.log('\x1b[32mChecklisten-Punkt als erledigt markiert!\x1b[0m');
+        console.log('\x1b[32mChecklist item marked as completed!\x1b[0m');
         
-        // Lokales active_ticket.json synchronisieren
+        // Sync local active_ticket.json
         const updatedChecklists = await apiRequest('GET', `/cards/${card.id}/checklists`);
         await syncLocalActiveTicket(card, updatedChecklists);
     } catch (error) {
@@ -374,19 +373,19 @@ async function completeCheckItem(cardShortLink, itemName) {
 
 async function searchCards(query) {
     try {
-        console.log(`Suche nach "${query}" auf dem Board...`);
+        console.log(`Searching for "${query}" on the board...`);
         const lists = await apiRequest('GET', `/boards/${boardId}/lists`);
         const cards = await apiRequest('GET', `/boards/${boardId}/cards`);
         const matches = cards.filter(c => c.name.toLowerCase().includes(query.toLowerCase()) || (c.desc && c.desc.toLowerCase().includes(query.toLowerCase())));
         if(matches.length === 0) {
-            console.log('Keine passenden Karten gefunden.');
+            console.log('No matching cards found.');
             return;
         }
         matches.forEach(card => {
             const list = lists.find(l => l.id === card.idList);
             console.log(`\n\x1b[36m- [${card.shortLink}] ${card.name}\x1b[0m`);
-            console.log(`  Liste: ${list ? list.name : 'Unbekannt'}`);
-            if(card.desc) console.log(`  Beschreibung: ${card.desc.substring(0, 100)}...`);
+            console.log(`  List: ${list ? list.name : 'Unknown'}`);
+            if(card.desc) console.log(`  Description: ${card.desc.substring(0, 100)}...`);
         });
     } catch (error) {
         console.error(error);
@@ -408,14 +407,14 @@ function getCardWeight(card) {
 
 async function sortBoard() {
     try {
-        console.log('Rufe Listen vom Trello-Board ab...');
+        console.log('Retrieving lists from Trello board...');
         const lists = await apiRequest('GET', `/boards/${boardId}/lists`);
         
         for (const list of lists) {
-            console.log(`\nPrüfe Liste: "${list.name}"...`);
+            console.log(`\nChecking list: "${list.name}"...`);
             const cards = await apiRequest('GET', `/lists/${list.id}/cards`);
             if (cards.length <= 1) {
-                console.log('  Zu wenige Karten zum Sortieren.');
+                console.log('  Too few cards to sort.');
                 continue;
             }
             
@@ -435,56 +434,56 @@ async function sortBoard() {
             }
             
             if (isSorted) {
-                console.log('  Liste ist bereits korrekt sortiert.');
+                console.log('  List is already correctly sorted.');
                 continue;
             }
             
-            console.log(`  Sortiere ${sortedCards.length} Karten in der Liste...`);
+            console.log(`  Sorting ${sortedCards.length} cards in the list...`);
             for (let i = 0; i < sortedCards.length; i++) {
                 const card = sortedCards[i];
                 const newPos = i + 1;
-                console.log(`    Bewege Karte [${card.shortLink}] "${card.name}" auf Position ${newPos}...`);
+                console.log(`    Moving card [${card.shortLink}] "${card.name}" to position ${newPos}...`);
                 await apiRequest('PUT', `/cards/${card.id}`, { pos: newPos });
             }
-            console.log(`  Liste "${list.name}" erfolgreich sortiert.`);
+            console.log(`  List "${list.name}" successfully sorted.`);
         }
-        console.log('\n\x1b[32mAlle Listen erfolgreich sortiert!\x1b[0m');
+        console.log('\n\x1b[32mAll lists successfully sorted!\x1b[0m');
     } catch (error) {
-        console.error('Fehler beim Sortieren des Boards:', error);
+        console.error('Error sorting the board:', error);
     }
 }
 
 async function backupBoard() {
     try {
-        console.log('Erstelle Backup des Trello-Boards...');
+        console.log('Creating backup of Trello board...');
         const lists = await apiRequest('GET', `/boards/${boardId}/lists`);
-        let output = `Trello Board Backup vom ${new Date().toLocaleString('de-DE')}\n`;
+        let output = `Trello Board Backup - ${new Date().toLocaleString('en-US')}\n`;
         output += `===============================================\n`;
         
         for (const list of lists) {
             output += `\n=== List: ${list.name} (ID: ${list.id}) ===\n`;
             const cards = await apiRequest('GET', `/lists/${list.id}/cards`);
             if(cards.length === 0) {
-                output += '  (Keine Aufgaben)\n';
+                output += '  (No tasks)\n';
             }
             else {
                 cards.forEach(card => {
                     output += `  - [${card.shortLink}] ${card.name}\n`;
                     if (card.desc) {
-                        output += `    Beschreibung: ${card.desc.replace(/\\r?\\n/g, '\\n    ')}\n`;
+                        output += `    Description: ${card.desc.replace(/\\r?\\n/g, '\\n    ')}\n`;
                     }
                 });
             }
         }
         
-        // Backup im lokalen .trello/ Ordner des Projekts speichern, falls vorhanden, sonst neben dem Script
+        // Save backup to the local project .agents/ folder if present, otherwise next to the script
 		let backupFilePath=path.join(process.cwd(),'.agents','board_backup.txt');
 		if(!fs.existsSync(path.dirname(backupFilePath))) {
 			backupFilePath=path.join(__dirname,'board_backup.txt');
 		}
         
         fs.writeFileSync(backupFilePath, output, 'utf8');
-        console.log(`\x1b[32mBackup erfolgreich unter ${backupFilePath} gespeichert!\x1b[0m`);
+        console.log(`\x1b[32mBackup successfully saved to ${backupFilePath}!\x1b[0m`);
     } catch (error) {
         console.error(error);
     }
@@ -498,9 +497,9 @@ async function embedMissingImages(card) {
 			let desc=card.desc||'';
 			const missingImages=imageAttachments.filter(img=>!desc.includes(img.url));
 			if(missingImages.length>0) {
-				console.log(`  -> Bette ${missingImages.length} Bild-Anhänge in Beschreibung ein...`);
+				console.log(`  -> Embedding ${missingImages.length} image attachment(s) into description...`);
 				desc=desc.trim();
-				desc+='\n\n---\n### 📎 Bilder-Anhänge:\n';
+				desc+='\n\n---\n### 📎 Image Attachments:\n';
 				for(const img of missingImages) {
 					desc+=`![${img.name}](${img.url})\n`;
 				}
@@ -510,69 +509,69 @@ async function embedMissingImages(card) {
 		}
 	}
 	catch(e) {
-		console.error(`  -> Fehler beim Einbetten von Bildern für Karte ${card.shortLink}:`,e.message);
+		console.error(`  -> Error embedding images for card ${card.shortLink}:`,e.message);
 	}
 }
 
 async function processInbox() {
     try {
-        console.log(`Rufe Listen ab, um Inbox "${INBOX_LIST_NAME}" zu finden...`);
+        console.log(`Retrieving lists to find inbox "${INBOX_LIST_NAME}"...`);
         const lists = await apiRequest('GET', `/boards/${boardId}/lists`);
         const inboxList = lists.find(l => l.name.toLowerCase().includes(INBOX_LIST_NAME.toLowerCase()));
         if (!inboxList) {
-            console.error(`Fehler: Inbox-Liste "${INBOX_LIST_NAME}" nicht gefunden.`);
+            console.error(`Error: Inbox list "${INBOX_LIST_NAME}" not found.`);
             return;
         }
         
-        console.log(`Hole Karten aus Inbox-Liste "${inboxList.name}"...`);
+        console.log(`Fetching cards from inbox list "${inboxList.name}"...`);
         const cards = await apiRequest('GET', `/lists/${inboxList.id}/cards`);
         
         if (cards.length === 0) {
-            console.log('Keine neuen E-Mail-Tickets in der Inbox.');
+            console.log('No new email tickets in the inbox.');
             return;
         }
         
-        console.log(`${cards.length} Ticket(s) in der Inbox gefunden. Verarbeite...`);
+        console.log(`Found ${cards.length} ticket(s) in the inbox. Processing...`);
         
         for (const card of cards) {
-            console.log(`\nVerarbeite Ticket: "${card.name}" [${card.shortLink}]`);
+            console.log(`\nProcessing ticket: "${card.name}" [${card.shortLink}]`);
             
-            // Bilder einbetten
+            // Embed images
             await embedMissingImages(card);
             
             const { cleanTitle, matchedLabel } = parsePrefixAndCleanTitle(card.name);
             
-            // 1. Titel aktualisieren falls geändert (Präfix entfernt)
+            // 1. Update title if changed (prefix removed)
             if (cleanTitle !== card.name) {
-                console.log(`  -> Ändere Titel zu: "${cleanTitle}"`);
+                console.log(`  -> Changing title to: "${cleanTitle}"`);
                 await apiRequest('PUT', `/cards/${card.id}`, { name: cleanTitle });
             }
             
-            // 2. Label zuweisen falls eins gematcht hat
+            // 2. Assign label if matched
             if (matchedLabel) {
                 const hasLabel = card.labels && card.labels.some(l => l.name === matchedLabel.name);
                 if (!hasLabel) {
-                    console.log(`  -> Weise Label "${matchedLabel.name}" (${matchedLabel.color}) zu...`);
+                    console.log(`  -> Assigning label "${matchedLabel.name}" (${matchedLabel.color})...`);
                     await apiRequest('POST', `/cards/${card.id}/labels?color=${matchedLabel.color}&name=${encodeURIComponent(matchedLabel.name)}`);
                 }
             }
             
-            // 3. In Ziel-Liste verschieben (deaktiviert - Benutzer schiebt Karten manuell)
-            // console.log(`  -> Verschiebe Karte in Liste "${targetList.name}"...`);
+            // 3. Move to target list (disabled - user moves cards manually)
+            // console.log(`  -> Moving card to list "${targetList.name}"...`);
             // await apiRequest('PUT', `/cards/${card.id}?idList=${targetList.id}`);
         }
         
-        // console.log('\nSortiere das Board nach Prioritäten...');
-        // await sortBoard(); // Automatische Sortierung deaktiviert
-        console.log('\x1b[32mInbox-Verarbeitung erfolgreich abgeschlossen!\x1b[0m');
+        // console.log('\nSorting the board by priority...');
+        // await sortBoard(); // Automatic sorting disabled
+        console.log('\x1b[32mInbox processing completed successfully!\x1b[0m');
     } catch (error) {
-        console.error('Fehler bei der Inbox-Verarbeitung:', error);
+        console.error('Error during inbox processing:', error);
     }
 }
 
 async function syncLabelsAndCards() {
 	try {
-		console.log('Synchronisiere globale Labels mit dem Board...');
+		console.log('Syncing global labels with Trello board...');
 		const boardLabels=await apiRequest('GET',`/boards/${boardId}/labels`);
 		
 		for(const mapping of labelMappings) {
@@ -580,17 +579,17 @@ async function syncLabelsAndCards() {
 			
 			if(existingLabel) {
 				if(existingLabel.color!==mapping.color) {
-					console.log(`  -> Aktualisiere Label-Farbe für "${mapping.name}" zu ${mapping.color}...`);
+					console.log(`  -> Updating label color for "${mapping.name}" to ${mapping.color}...`);
 					await apiRequest('PUT',`/labels/${existingLabel.id}`,{color:mapping.color});
 				}
 			}
 			else {
-				console.log(`  -> Erstelle neues Label "${mapping.name}" (${mapping.color}) auf dem Board...`);
+				console.log(`  -> Creating new label "${mapping.name}" (${mapping.color}) on the board...`);
 				await apiRequest('POST',`/boards/${boardId}/labels`,{name:mapping.name,color:mapping.color});
 			}
 		}
 		
-		console.log('Prüfe und bereinige Karten-Titel und -Labels auf dem gesamten Board...');
+		console.log('Checking and cleaning card titles and labels board-wide...');
 		const cards=await apiRequest('GET',`/boards/${boardId}/cards`);
 		const updatedLabels=await apiRequest('GET',`/boards/${boardId}/labels`);
 		
@@ -598,7 +597,7 @@ async function syncLabelsAndCards() {
 			const {cleanTitle,matchedLabel}=parsePrefixAndCleanTitle(card.name);
 			
 			if(cleanTitle!==card.name) {
-				console.log(`  -> Passe Titel von [${card.shortLink}] an: "${cleanTitle}"`);
+				console.log(`  -> Adjusting title for [${card.shortLink}]: "${cleanTitle}"`);
 				await apiRequest('PUT',`/cards/${card.id}`,{name:cleanTitle});
 			}
 			
@@ -607,58 +606,58 @@ async function syncLabelsAndCards() {
 				const hasLabel=card.idLabels&&card.idLabels.includes(boardLabel.id);
 				
 				if(!hasLabel&&boardLabel) {
-					console.log(`  -> Weise Karte [${card.shortLink}] das Label "${boardLabel.name}" zu...`);
+					console.log(`  -> Assigning label "${boardLabel.name}" to card [${card.shortLink}]...`);
 					await apiRequest('POST',`/cards/${card.id}/idLabels`,{value:boardLabel.id});
 				}
 			}
 		}
-		console.log('\x1b[32mSynchronisation des Boards erfolgreich abgeschlossen!\x1b[0m');
+		console.log('\x1b[32mBoard sync completed successfully!\x1b[0m');
 	}
 	catch(error) {
-		console.error('Fehler bei der Synchronisation:',error);
+		console.error('Error during synchronization:',error);
 	}
 }
 
 async function listenInbox(intervalMinutes = 5) {
-    console.log(`\n\x1b[35m=== Trello Inbox Polling Daemon gestartet ===\x1b[0m`);
-    console.log(`Überwache Liste: "${INBOX_LIST_NAME}"`);
-    console.log(`Intervall: alle ${intervalMinutes} Minuten`);
-    console.log(`Drücke Strg+C zum Beenden.\n`);
+    console.log(`\n\x1b[35m=== Trello Inbox Polling Daemon Started ===\x1b[0m`);
+    console.log(`Monitoring list: "${INBOX_LIST_NAME}"`);
+    console.log(`Interval: every ${intervalMinutes} minutes`);
+    console.log(`Press Ctrl+C to terminate.\n`);
     
-    // Erste Ausführung sofort
+    // First run immediately
     await processInbox();
     
     setInterval(async () => {
         const timestamp = new Date().toLocaleString('de-DE');
-        console.log(`\n[${timestamp}] Überprüfe Inbox...`);
+        console.log(`\n[${timestamp}] Checking inbox...`);
         await processInbox();
     }, intervalMinutes * 60000);
 }
 
 async function completeSession(cardShortLink, manualTimeEstimate = '') {
     try {
-        // 1. Trello-Karte holen und verschieben
+        // 1. Fetch and move the Trello card
         const card = await apiRequest('GET', `/cards/${cardShortLink}`);
         const lists = await apiRequest('GET', `/boards/${boardId}/lists`);
         const targetList = lists.find(l => l.name.toLowerCase().includes(COMPLETED_LIST_NAME.toLowerCase())) ||
                            lists.find(l => l.name.toLowerCase().includes('implemented') || l.name.toLowerCase().includes('done') || l.name.toLowerCase().includes('completed') || l.name.toLowerCase().includes('complete'));
-        if(!targetList) throw `Keine passende Liste ("${COMPLETED_LIST_NAME}", "Implemented", "Completed" oder "Done") gefunden!`;
+        if(!targetList) throw `No matching list ("${COMPLETED_LIST_NAME}", "Implemented", "Completed", or "Done") found!`;
         
-        console.log(`Bewege Karte [${cardShortLink}] "${card.name}" in Liste "${targetList.name}"...`);
+        console.log(`Moving card [${cardShortLink}] "${card.name}" to list "${targetList.name}"...`);
         await apiRequest('PUT', `/cards/${card.id}?idList=${targetList.id}`);
         
-        // Lokale active_ticket.json löschen falls vorhanden
+        // Delete local active_ticket.json if present
         const activeTicketPath = path.join(process.cwd(), 'active_ticket.json');
         if(fs.existsSync(activeTicketPath)) {
             try {
                 fs.unlinkSync(activeTicketPath);
-                console.log('Lokales active_ticket.json gelöscht.');
+                console.log('Local active_ticket.json deleted.');
             } catch (e) {
-                // Ignorieren
+                // Ignore
             }
         }
         
-        // 2. Billing Log einlesen (versuchen im Projektordner, sonst relativ zum Script)
+        // 2. Read billing log (try local project folder first, fallback to script directory)
 		const logFilename=config.BILLING_LOG_FILE||'billing-log.md';
 		let billingLogPath;
 		if(path.isAbsolute(logFilename)) {
@@ -672,13 +671,13 @@ async function completeSession(cardShortLink, manualTimeEstimate = '') {
 		}
         
         if(!fs.existsSync(billingLogPath)) {
-            console.log('Hinweis: billing-log.md existiert nicht, überspringe automatischen Log-Eintrag.');
+            console.log('Notice: billing log file does not exist, skipping automatic log entry.');
             return;
         }
         
         let content = fs.readFileSync(billingLogPath, 'utf8');
         
-        // Finde aktive Zeile im Logbuch
+        // Find the active session line in the logbook
         const lines = content.split(/\r?\n/);
         let activeLineIndex = -1;
         let startTimeStr = '';
@@ -697,11 +696,11 @@ async function completeSession(cardShortLink, manualTimeEstimate = '') {
         }
         
         if(activeLineIndex === -1) {
-            console.log('Keine aktive Session im Logbuch gefunden. Karte wurde verschoben, Log unverändert.');
+            console.log('No active session found in the logbook. Card moved, log untouched.');
             return;
         }
         
-        // 3. Zeiten berechnen
+        // 3. Calculate session duration
         const now = new Date();
         const pad = (n) => String(n).padStart(2, '0');
         const endTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -727,10 +726,10 @@ async function completeSession(cardShortLink, manualTimeEstimate = '') {
             }
         }
         
-        // Zeile im Logbuch aktualisieren
+        // Update the session line in the logbook
         lines[activeLineIndex] = `| ${dateStr} | ${startTimeStr} | ${endTimeStr} | ${actualTimeText} | ${estTimeText} | Erledigt (${card.name}) |`;
         
-        // 4. Rechnungsposition generieren
+        // 4. Generate billing item entry
         const billingItem = `
 ### [${dateStr}] Session: ${card.name}
 *   **Tatsächliche Entwicklungszeit mit KI & Review:** ${actualTimeText} (${startTimeStr} - ${endTimeStr} Uhr)
@@ -748,7 +747,7 @@ async function completeSession(cardShortLink, manualTimeEstimate = '') {
         newContent = newContent.trim() + '\n\n' + billingItem.trim() + '\n';
         
         fs.writeFileSync(billingLogPath, newContent, 'utf8');
-        console.log('\x1b[32mSession erfolgreich beendet und im Logbuch (.agents/rules/billing-log.md) dokumentiert!\x1b[0m');
+        console.log('\x1b[32mSession successfully completed and documented in the billing log!\x1b[0m');
     } catch (error) {
         console.error(error);
     }
@@ -766,7 +765,7 @@ else if(command === 'add') {
     const desc = args[2] || '';
     const listName = args[3] || '';
     if(!title) {
-        console.error('Verwendung: node trello.js add "Kartentitel" ["Kartenbeschreibung"] ["ListenName"]');
+        console.error('Usage: node trello.js add "Card Title" ["Card Description"] ["ListName"]');
         process.exit(1);
     }
     addCard(title, desc, listName);
@@ -775,7 +774,7 @@ else if(command === 'move') {
     const cardLink = args[1];
     const listName = args[2];
     if(!cardLink || !listName) {
-        console.error('Verwendung: node trello.js move "shortLink" "ListenName"');
+        console.error('Usage: node trello.js move "shortLink" "ListName"');
         process.exit(1);
     }
     moveCard(cardLink, listName);
@@ -783,7 +782,7 @@ else if(command === 'move') {
 else if(command === 'archive') {
     const cardLink = args[1];
     if(!cardLink) {
-        console.error('Verwendung: node trello.js archive "shortLink"');
+        console.error('Usage: node trello.js archive "shortLink"');
         process.exit(1);
     }
     archiveCard(cardLink);
@@ -791,7 +790,7 @@ else if(command === 'archive') {
 else if(command === 'delete') {
     const cardLink = args[1];
     if(!cardLink) {
-        console.error('Verwendung: node trello.js delete "shortLink"');
+        console.error('Usage: node trello.js delete "shortLink"');
         process.exit(1);
     }
     deleteCard(cardLink);
@@ -801,7 +800,7 @@ else if(command === 'label') {
     const color = args[2];
     const labelName = args[3] || '';
     if(!cardLink || !color) {
-        console.error('Verwendung: node trello.js label "shortLink" "Farbe" ["LabelName"]');
+        console.error('Usage: node trello.js label "shortLink" "Color" ["LabelName"]');
         process.exit(1);
     }
     addLabel(cardLink, color, labelName);
@@ -810,7 +809,7 @@ else if(command === 'comment') {
     const cardLink = args[1];
     const text = args[2];
     if(!cardLink || !text) {
-        console.error('Verwendung: node trello.js comment "shortLink" "Kommentartext"');
+        console.error('Usage: node trello.js comment "shortLink" "CommentText"');
         process.exit(1);
     }
     addComment(cardLink, text);
@@ -819,7 +818,7 @@ else if(command === 'check') {
     const cardLink = args[1];
     const itemName = args[2];
     if(!cardLink || !itemName) {
-        console.error('Verwendung: node trello.js check "shortLink" "AufgabenName"');
+        console.error('Usage: node trello.js check "shortLink" "TaskName"');
         process.exit(1);
     }
     addCheckItem(cardLink, itemName);
@@ -828,7 +827,7 @@ else if(command === 'check-done') {
     const cardLink = args[1];
     const itemName = args[2];
     if(!cardLink || !itemName) {
-        console.error('Verwendung: node trello.js check-done "shortLink" "AufgabenName"');
+        console.error('Usage: node trello.js check-done "shortLink" "TaskName"');
         process.exit(1);
     }
     completeCheckItem(cardLink, itemName);
@@ -836,7 +835,7 @@ else if(command === 'check-done') {
 else if(command === 'search') {
     const query = args[1];
     if(!query) {
-        console.error('Verwendung: node trello.js search "Suchbegriff"');
+        console.error('Usage: node trello.js search "SearchTerm"');
         process.exit(1);
     }
     searchCards(query);
@@ -845,7 +844,7 @@ else if(command === 'complete') {
     const cardLink = args[1];
     const manualTimeEstimate = args[2] || '';
     if(!cardLink) {
-        console.error('Verwendung: node trello.js complete "shortLink" ["ManuelleZeitschätzung"]');
+        console.error('Usage: node trello.js complete "shortLink" ["ManualTimeEstimate"]');
         process.exit(1);
     }
     completeSession(cardLink, manualTimeEstimate);
@@ -859,7 +858,7 @@ else if(command === 'sort') {
 else if(command === 'start') {
     const cardLink = args[1];
     if(!cardLink) {
-        console.error('Verwendung: node trello.js start "shortLink"');
+        console.error('Usage: node trello.js start "shortLink"');
         process.exit(1);
     }
     startCard(cardLink);
@@ -875,5 +874,5 @@ else if(command === 'listen') {
     listenInbox(interval);
 }
 else {
-    console.log('Unbekannter Befehl. Verfügbar: list, add, move, start, archive, delete, label, comment, check, check-done, search, complete, backup, sort, inbox, listen, sync');
+    console.log('Unknown command. Available: list, add, move, start, archive, delete, label, comment, check, check-done, search, complete, backup, sort, inbox, listen, sync');
 }
