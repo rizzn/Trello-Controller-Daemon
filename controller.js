@@ -550,60 +550,119 @@ async function embedMissingImages(card) {
 	}
 }
 
+function getNormalizedTitle(title) {
+	let clean=title.trim();
+	let changed=true;
+	while(changed) {
+		changed=false;
+		const emailPrefixRegex=/^(re|fwd|aw|wg|antwort|fw)\s*:\s*/i;
+		if(emailPrefixRegex.test(clean)) {
+			clean=clean.replace(emailPrefixRegex,'').trim();
+			changed=true;
+		}
+		for(const mapping of labelMappings) {
+			const keyword=mapping.prefix.replace(/[\[\]]/g,'').trim().toLowerCase();
+			const patterns=[
+				`[${keyword}]`,
+				`${keyword}:`,
+				`[${keyword}]:`
+			];
+			for(const pat of patterns) {
+				if(clean.toLowerCase().startsWith(pat.toLowerCase())) {
+					clean=clean.substring(pat.length).trim();
+					changed=true;
+				}
+			}
+		}
+	}
+	return clean.replace(/\s+/g,' ').toLowerCase();
+}
+
+async function searchAndMerge(incomingCard,allCards) {
+	const incomingNormalized=getNormalizedTitle(incomingCard.name);
+	if(incomingNormalized.length<5) {
+		return false;
+	}
+	const matchedCard=allCards.find(c=>c.id!==incomingCard.id&&getNormalizedTitle(c.name)===incomingNormalized);
+	if(matchedCard) {
+		console.log(`  -> Match found! Merging [${incomingCard.shortLink}] into existing card [${matchedCard.shortLink}] ("${matchedCard.name}")`);
+		const senderInfo=incomingCard.desc?`\n\n**Inhalt der E-Mail:**\n${incomingCard.desc}`:'\n*(Kein E-Mail-Inhalt)*';
+		const commentText=`✉️ **E-Mail-Update erhalten für das Ticket:**\n"${incomingCard.name}"${senderInfo}`;
+		await apiRequest('POST',`/cards/${matchedCard.id}/actions/comments`,{text:commentText});
+		try {
+			const attachments=await apiRequest('GET',`/cards/${incomingCard.id}/attachments`);
+			if(attachments&&attachments.length>0) {
+				console.log(`  -> Transferring ${attachments.length} attachment(s)...`);
+				for(const att of attachments) {
+					await apiRequest('POST',`/cards/${matchedCard.id}/attachments`,{url:att.url,name:att.name});
+				}
+				await embedMissingImages(matchedCard);
+			}
+		}
+		catch(err) {
+			console.error(`  -> Error transferring attachments:`,err.message||err);
+		}
+		console.log(`  -> Deleting temporary inbox card [${incomingCard.shortLink}]...`);
+		await apiRequest('DELETE',`/cards/${incomingCard.id}`);
+		return true;
+	}
+	return false;
+}
+
 async function processInbox() {
-    try {
-        console.log(`Retrieving lists to find inbox "${INBOX_LIST_NAME}"...`);
-        const lists = await apiRequest('GET', `/boards/${boardId}/lists`);
-        const inboxList = lists.find(l => l.name.toLowerCase().includes(INBOX_LIST_NAME.toLowerCase()));
-        if (!inboxList) {
-            console.error(`Error: Inbox list "${INBOX_LIST_NAME}" not found.`);
-            return;
-        }
-        
-        console.log(`Fetching cards from inbox list "${inboxList.name}"...`);
-        const cards = await apiRequest('GET', `/lists/${inboxList.id}/cards`);
-        
-        if (cards.length === 0) {
-            console.log('No new email tickets in the inbox.');
-            return;
-        }
-        
-        console.log(`Found ${cards.length} ticket(s) in the inbox. Processing...`);
-        
-        for (const card of cards) {
-            console.log(`\nProcessing ticket: "${card.name}" [${card.shortLink}]`);
-            
-            // Embed images
-            await embedMissingImages(card);
-            
-            const { cleanTitle, matchedLabel } = parsePrefixAndCleanTitle(card.name);
-            
-            // 1. Update title if changed (prefix removed)
-            if (cleanTitle !== card.name) {
-                console.log(`  -> Changing title to: "${cleanTitle}"`);
-                await apiRequest('PUT', `/cards/${card.id}`, { name: cleanTitle });
-            }
-            
-            // 2. Assign label if matched
-            if (matchedLabel) {
-                const hasLabel = card.labels && card.labels.some(l => l.name === matchedLabel.name);
-                if (!hasLabel) {
-                    console.log(`  -> Assigning label "${matchedLabel.name}" (${matchedLabel.color})...`);
-                    await apiRequest('POST', `/cards/${card.id}/labels?color=${matchedLabel.color}&name=${encodeURIComponent(matchedLabel.name)}`);
-                }
-            }
-            
-            // 3. Move to target list (disabled - user moves cards manually)
-            // console.log(`  -> Moving card to list "${targetList.name}"...`);
-            // await apiRequest('PUT', `/cards/${card.id}?idList=${targetList.id}`);
-        }
-        
-        // console.log('\nSorting the board by priority...');
-        // await sortBoard(); // Automatic sorting disabled
-        console.log('\x1b[32mInbox processing completed successfully!\x1b[0m');
-    } catch (error) {
-        console.error('Error during inbox processing:', error);
-    }
+	try {
+		console.log(`Retrieving lists to find inbox "${INBOX_LIST_NAME}"...`);
+		const lists=await apiRequest('GET',`/boards/${boardId}/lists`);
+		const inboxList=lists.find(l=>l.name.toLowerCase().includes(INBOX_LIST_NAME.toLowerCase()));
+		if(!inboxList) {
+			console.error(`Error: Inbox list "${INBOX_LIST_NAME}" not found.`);
+			return;
+		}
+		
+		console.log(`Fetching cards from inbox list "${inboxList.name}"...`);
+		const cards=await apiRequest('GET',`/lists/${inboxList.id}/cards`);
+		
+		if(cards.length===0) {
+			console.log('No new email tickets in the inbox.');
+			return;
+		}
+		
+		console.log(`Found ${cards.length} ticket(s) in the inbox. Processing...`);
+		const allCards=await apiRequest('GET',`/boards/${boardId}/cards`);
+		
+		for(const card of cards) {
+			console.log(`\nProcessing ticket: "${card.name}" [${card.shortLink}]`);
+			
+			const merged=await searchAndMerge(card,allCards);
+			if(merged) {
+				continue;
+			}
+			
+			// Embed images
+			await embedMissingImages(card);
+			
+			const { cleanTitle, matchedLabel } = parsePrefixAndCleanTitle(card.name);
+			
+			// 1. Update title if changed (prefix removed)
+			if (cleanTitle !== card.name) {
+				console.log(`  -> Changing title to: "${cleanTitle}"`);
+				await apiRequest('PUT',`/cards/${card.id}`,{name:cleanTitle});
+			}
+			
+			// 2. Assign label if matched
+			if (matchedLabel) {
+				const hasLabel = card.labels && card.labels.some(l => l.name === matchedLabel.name);
+				if (!hasLabel) {
+					console.log(`  -> Assigning label "${matchedLabel.name}" (${matchedLabel.color})...`);
+					await apiRequest('POST',`/cards/${card.id}/labels?color=${matchedLabel.color}&name=${encodeURIComponent(matchedLabel.name)}`);
+				}
+			}
+		}
+		
+		console.log('\x1b[32mInbox processing completed successfully!\x1b[0m');
+	} catch (error) {
+		console.error('Error during inbox processing:', error);
+	}
 }
 
 async function syncLabelsAndCards() {
