@@ -1,2 +1,5 @@
 Set shell = CreateObject("WScript.Shell")
-shell.Run "node E:/.appdata/.agents/trello/global_runner.js", 0, True
+Set fso = CreateObject("Scripting.FileSystemObject")
+scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
+runnerPath = fso.BuildPath(scriptDir, "global_runner.js")
+shell.Run "node """ & runnerPath & """", 0, True
