@@ -67,3 +67,9 @@ When you, the AI agent, are working on a ticket, you must strictly follow this w
      `node .agents/trello/controller.js complete [otherShortLink]`
      This moves those cards to the **"Completed Tickets"** list on Trello. Since the first call already closed the active session row, subsequent calls will complete without duplicating logbook entries.
    - Ensure the generated billing line item matches the formatting rules specified in the project's `billing-rules.md` (e.g., German language, clear customer value, no technical jargon).
+
+## 6. Automatic Ticket Merging (Replies via Email)
+The daemon automatically merges email replies/updates sent to the board's email address into existing cards if they match.
+- **Title Normalization:** The daemon strips common email prefixes (`Re:`, `Aw:`, `Fwd:`, `WG:`, etc.) and label prefixes (`[BUG]`, `[FEATURE]`, etc.) to find matching original cards.
+- **Merging Action:** If a match is found, the body of the new email card is added as a comment to the existing card. Any attachments are transferred to the original card (and embedded in the description), and the temporary inbox card is deleted.
+- **Workflow Benefit:** Users can simply reply to previous emails, and updates will be threaded directly as comments under the corresponding active card.

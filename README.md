@@ -43,6 +43,7 @@ Built completely in native Node.js without heavy external dependencies.
   - Automatically log completed tickets and checklists into a localized Markdown billing file (`billing-log.md`) with a user-friendly title, consumer details, and time-saving metrics.
 - **Project-Agnostic Registry (`projects.json`):** Manage multiple local projects and their Trello credentials from a single, centralized configuration.
 - **Background Daemon Polling (`listen` / Runner):** Set up a background cron/task to periodically poll inbox lists and parse cards silently.
+- **Automatic Ticket Merging (E-Mail Threading):** Automatically merges email replies/updates (e.g. `Re:`, `Aw:`) sent to the board's email address into existing cards as comments by matching normalized titles, copying description texts, and transferring files/attachments.
 - **Board Backups:** Exports board structures and cards into a clean local text document (`board_backup.txt`).
 
 ## Installation & Folder Structure
@@ -213,6 +214,14 @@ node /path/to/trello-controller-daemon/global_runner.js
 ```
 
 To run it completely hidden in the background on Windows, trigger `run_silent.vbs` via the Windows Task Scheduler.
+
+## Automatic Ticket Merging (Email Replies)
+
+To keep your board clean and organized, the background daemon automatically processes incoming email replies and threading updates:
+
+1. **Detection:** When a user replies to an existing ticket email, Trello creates a new card in the incoming list (e.g., `Re: [BUG] Video player crash`).
+2. **Title Normalization:** The daemon recursively strips standard email prefixes (`Re:`, `Aw:`, `Fwd:`, `WG:`, etc.) and Trello prefix labels (`[BUG]`, `[FEATURE]`, etc.) to find the matching original card title.
+3. **Merging:** The daemon posts the body of the new reply as a comment on the original card, copies any attachments/files, triggers image embedding, and permanently deletes the duplicate incoming inbox card.
 
 ## License
 
