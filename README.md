@@ -224,7 +224,9 @@ To keep your board clean and organized, the background daemon automatically proc
 
 1. **Detection:** When a user replies to an existing ticket email, Trello creates a new card in the incoming list (e.g., `Re: [BUG] Video player crash`).
 2. **Title Normalization:** The daemon recursively strips standard email prefixes (`Re:`, `Aw:`, `Fwd:`, `WG:`, etc.) and Trello prefix labels (`[BUG]`, `[FEATURE]`, etc.) to find the matching original card title.
-3. **Merging:** The daemon posts the body of the new reply as a comment on the original card, copies any attachments/files, triggers image embedding, and permanently deletes the duplicate incoming inbox card.
+3. **Email Reply Cleanup:** To prevent comment clutter, the daemon cleanses the email description. It automatically cuts out email signatures and previous thread history quotes (looking for indicators like `-----Original Message-----`, `Am ... schrieb`, `On ... wrote:`, `Von:`, `--`, `Gesendet mit`, etc.). Only the actual new response is posted.
+4. **Auto-Reopening:** If the matching original ticket is archived or currently residing in the **"Completed Tickets"** list, the daemon automatically restores it (unarchives it), moves it back to the **Inbox** (`Incoming Tickets`), and posts an alert comment (`🔄 Ticket automatisch wiedereröffnet: Eine neue E-Mail-Antwort wurde empfangen.`), ensuring that client feedback on resolved issues never gets missed.
+5. **Merging:** The daemon posts the cleaned body of the new reply as a comment on the original card, copies any attachments/files, triggers image embedding, and permanently deletes the duplicate incoming inbox card.
 
 ## License
 

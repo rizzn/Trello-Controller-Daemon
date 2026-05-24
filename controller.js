@@ -550,6 +550,31 @@ async function embedMissingImages(card) {
 	}
 }
 
+function cleanEmailBody(body) {
+	if(!body) return '';
+	const lines=body.split(/\r?\n/);
+	const cleanedLines=[];
+	const cutSignatures=[
+		/^\s*[-_—=]{3,}\s*$/,
+		/^\s*am\s+\d{1,2}\.\d{1,2}\.\d{4}\s+/i,
+		/^\s*on\s+.*wrote\s*:\s*$/i,
+		/^\s*von\s*:\s*/i,
+		/^\s*from\s*:\s*/i,
+		/^\s*sent\s+from\s+my\s+/i,
+		/^\s*gesendet\s+mit\s+/i,
+		/^\s*original\s+message/i,
+		/^\s*ursprüngliche\s+nachricht/i,
+		/^\s*--\s*$/
+	];
+	for(const line of lines) {
+		if(cutSignatures.some(regex=>regex.test(line))) {
+			break;
+		}
+		cleanedLines.push(line);
+	}
+	return cleanedLines.join('\n').trim();
+}
+
 function getNormalizedTitle(title) {
 	let clean=title.trim();
 	let changed=true;
@@ -578,7 +603,7 @@ function getNormalizedTitle(title) {
 	return clean.replace(/\s+/g,' ').toLowerCase();
 }
 
-async function searchAndMerge(incomingCard,allCards) {
+async function searchAndMerge(incomingCard,allCards,inboxList,lists) {
 	const incomingNormalized=getNormalizedTitle(incomingCard.name);
 	if(incomingNormalized.length<5) {
 		return false;
@@ -586,7 +611,8 @@ async function searchAndMerge(incomingCard,allCards) {
 	const matchedCard=allCards.find(c=>c.id!==incomingCard.id&&getNormalizedTitle(c.name)===incomingNormalized);
 	if(matchedCard) {
 		console.log(`  -> Match found! Merging [${incomingCard.shortLink}] into existing card [${matchedCard.shortLink}] ("${matchedCard.name}")`);
-		const senderInfo=incomingCard.desc?`\n\n**Inhalt der E-Mail:**\n${incomingCard.desc}`:'\n*(Kein E-Mail-Inhalt)*';
+		const cleanedDesc=cleanEmailBody(incomingCard.desc);
+		const senderInfo=cleanedDesc?`\n\n**Inhalt der E-Mail:**\n${cleanedDesc}`:'\n*(Kein E-Mail-Inhalt)*';
 		const commentText=`✉️ **E-Mail-Update erhalten für das Ticket:**\n"${incomingCard.name}"${senderInfo}`;
 		await apiRequest('POST',`/cards/${matchedCard.id}/actions/comments`,{text:commentText});
 		try {
@@ -602,6 +628,14 @@ async function searchAndMerge(incomingCard,allCards) {
 		catch(err) {
 			console.error(`  -> Error transferring attachments:`,err.message||err);
 		}
+		
+		const completedList=lists.find(l=>l.name.toLowerCase().includes(COMPLETED_LIST_NAME.toLowerCase()));
+		if(matchedCard.closed||(completedList&&matchedCard.idList===completedList.id)) {
+			console.log(`  -> Original card was completed/archived. Reopening and moving to Inbox...`);
+			await apiRequest('PUT',`/cards/${matchedCard.id}`,{idList:inboxList.id,closed:false});
+			await apiRequest('POST',`/cards/${matchedCard.id}/actions/comments`,{text:`🔄 **Ticket automatisch wiedereröffnet:** Eine neue E-Mail-Antwort wurde empfangen.`});
+		}
+		
 		console.log(`  -> Deleting temporary inbox card [${incomingCard.shortLink}]...`);
 		await apiRequest('DELETE',`/cards/${incomingCard.id}`);
 		return true;
@@ -633,7 +667,7 @@ async function processInbox() {
 		for(const card of cards) {
 			console.log(`\nProcessing ticket: "${card.name}" [${card.shortLink}]`);
 			
-			const merged=await searchAndMerge(card,allCards);
+			const merged=await searchAndMerge(card,allCards,inboxList,lists);
 			if(merged) {
 				continue;
 			}
