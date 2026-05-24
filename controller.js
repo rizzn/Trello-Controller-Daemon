@@ -140,6 +140,36 @@ function apiRequest(method, urlPath, payload = null) {
     });
 }
 
+function getEmlContent(cardId,attachmentId,fileName) {
+	return new Promise((resolve,reject)=>{
+		const fullPath=`/1/cards/${cardId}/attachments/${attachmentId}/download/${encodeURIComponent(fileName)}`;
+		const options={
+			hostname:'api.trello.com',
+			port:443,
+			path:fullPath,
+			method:'GET',
+			headers:{
+				'Authorization':`OAuth oauth_consumer_key="${KEY}", oauth_token="${TOKEN}"`
+			}
+		};
+		const handleResponse=(res)=>{
+			if(res.statusCode===301||res.statusCode===302) {
+				const redirectUrl=res.headers.location;
+				https.get(redirectUrl,handleResponse).on('error',reject);
+				return;
+			}
+			if(res.statusCode>=200&&res.statusCode<300) {
+				let data='';
+				res.on('data',chunk=>data+=chunk);
+				res.on('end',()=>resolve(data));
+			}else {
+				reject(new Error(`Failed to download EML: Status ${res.statusCode}`));
+			}
+		};
+		https.get(options,handleResponse).on('error',reject);
+	});
+}
+
 // Core functions
 async function showBoard() {
     try {
@@ -620,9 +650,25 @@ async function searchAndMerge(incomingCard,allCards,inboxList,lists) {
 	const matchedCard=allCards.find(c=>c.id!==incomingCard.id&&getNormalizedTitle(c.name)===incomingNormalized);
 	if(matchedCard) {
 		console.log(`  -> Match found! Merging [${incomingCard.shortLink}] into existing card [${matchedCard.shortLink}] ("${matchedCard.name}")`);
+		let sender='';
+		try {
+			const attachments=await apiRequest('GET',`/cards/${incomingCard.id}/attachments`);
+			const emlAttachment=attachments&&attachments.find(att=>att.name&&att.name.toLowerCase().endsWith('.eml'));
+			if(emlAttachment) {
+				const emlContent=await getEmlContent(incomingCard.id,emlAttachment.id,emlAttachment.name);
+				const fromMatch=emlContent.match(/^From:\s*([^\r\n]+)/mi);
+				if(fromMatch) {
+					sender=fromMatch[1].trim();
+				}
+			}
+		}
+		catch(err) {
+			console.error(`  -> Failed to extract sender for merge:`,err.message||err);
+		}
 		const cleanedDesc=cleanEmailBody(incomingCard.desc);
+		const senderHeader=sender?` from **${sender}**` : '';
 		const senderInfo=cleanedDesc?`\n\n**${MSG_EMAIL_CONTENT}:**\n${cleanedDesc}`:`\n*(${MSG_NO_EMAIL_CONTENT})*`;
-		const commentText=`${MSG_EMAIL_UPDATE}\n"${incomingCard.name}"${senderInfo}`;
+		const commentText=`${MSG_EMAIL_UPDATE}${senderHeader}\n"${incomingCard.name}"${senderInfo}`;
 		await apiRequest('POST',`/cards/${matchedCard.id}/actions/comments`,{text:commentText});
 		try {
 			const attachments=await apiRequest('GET',`/cards/${incomingCard.id}/attachments`);
@@ -759,6 +805,29 @@ async function processInbox() {
 			
 			// Embed images
 			await embedMissingImages(card);
+			
+			// Process EML attachment to extract sender and clean description
+			try {
+				const attachments=await apiRequest('GET',`/cards/${card.id}/attachments`);
+				const emlAttachment=attachments&&attachments.find(att=>att.name&&att.name.toLowerCase().endsWith('.eml'));
+				if(emlAttachment) {
+					console.log(`  -> Found email attachment: "${emlAttachment.name}". Extracting sender...`);
+					const emlContent=await getEmlContent(card.id,emlAttachment.id,emlAttachment.name);
+					const fromMatch=emlContent.match(/^From:\s*([^\r\n]+)/mi);
+					if(fromMatch) {
+						const sender=fromMatch[1].trim();
+						console.log(`  -> Extracted sender: ${sender}`);
+						const cleanedDesc=cleanEmailBody(card.desc);
+						const newDesc=`**Ticket erstellt von:** ${sender}\n\n---\n\n${cleanedDesc}`;
+						await apiRequest('PUT',`/cards/${card.id}`,{desc:newDesc});
+						card.desc=newDesc;
+						console.log(`  -> Description updated with sender info and signature removed.`);
+					}
+				}
+			}
+			catch(err) {
+				console.error(`  -> Failed to process EML attachment:`,err.message||err);
+			}
 			
 			const { cleanTitle, matchedLabel } = parsePrefixAndCleanTitle(card.name);
 			

@@ -44,6 +44,7 @@ Built completely in native Node.js without heavy external dependencies.
 - **Project-Agnostic Registry (`projects.json`):** Manage multiple local projects and their Trello credentials from a single, centralized configuration.
 - **Background Daemon Polling (`listen` / Runner):** Set up a background cron/task to periodically poll inbox lists and parse cards silently.
 - **Automatic Ticket Merging (E-Mail Threading):** Automatically merges email replies/updates (e.g. `Re:`, `Aw:`) sent to the board's email address into existing cards as comments by matching normalized titles, copying description texts, and transferring files/attachments.
+- **Email Sender Extraction & Cleanup:** Extracts the original sender's email address (via `.eml` parsing) and prepends it directly to the card description (`**Ticket erstellt von:** [Sender]`) or comment header, while fully stripping out signatures, greeting lines, and previous reply history to keep the board clean.
 - **Board Backups:** Exports board structures and cards into a clean local text document (`board_backup.txt`).
 
 ## Installation & Folder Structure
