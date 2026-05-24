@@ -146,6 +146,9 @@ node /path/to/trello-controller-daemon/controller.js news peek
 
 This tool includes an automated session calculator and billing logger that operates on a markdown logbook file (defined via `billing_path` inside the project's config block).
 
+> [!TIP]
+> **No Manual Effort Required!** You do not need to perform these tracking steps manually. If you are using an AI Coding Assistant/Agent (such as Gemini, Antigravity, Cline, Roo-Code, etc.), the agent can completely automate this Session Tracking and Billing Process for you. Just ask your agent to start working on a ticket, and it will handle all the steps below.
+
 #### Step 1: Start a Session
 Before starting your work, add an active session row to the session table in your markdown billing log:
 ```markdown
@@ -196,7 +199,7 @@ This tool is designed to seamlessly integrate with modern **AI Coding Environmen
    - Deletes `active_ticket.json`.
    - Generates and appends a consumer-ready billing line item to the project's markdown billing log.
 
-This allows the agent to handle the entire lifecycle of a ticket fully automated, from start to completion and billing, with zero human overhead.
+This allows the agent to handle the entire lifecycle of a ticket fully automated, from start to completion and billing, with zero human overhead. The user simply delegates the ticket to the agent; the agent initiates the session, updates the checklist, calculates the time, and logs the billing item automatically without requiring manual user intervention.
 
 #### Recommended `.gitignore`:
 To prevent tracking temporary workspace ticket context in your git commits, add `active_ticket.json` to your project's local `.gitignore` file:
