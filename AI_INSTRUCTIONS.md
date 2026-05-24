@@ -17,6 +17,10 @@ To work correctly, the target Trello board must have the following list naming c
 ## 2. Execution Paths
 When working in a project workspace that is symlinked to the central `.agents` directory:
 - **DO NOT** search for a local `.trello` folder.
+- **Daemon Setup:** When initializing a workspace on a Windows system, the agent should automatically run the `install_daemon.ps1` script to ensure that the background daemon task (`TrelloInboxProcessor`) is installed and configured to run every 1 minute:
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File .agents/trello/install_daemon.ps1
+  ```
 - Execute all Trello tasks using:
   ```powershell
   node .agents/trello/controller.js [command]
@@ -87,7 +91,7 @@ The daemon loads label priorities, prefix mappings, and user-facing Trello comme
   - `processingCompleted`: Comment posted when completing a card (`complete`). Supports `{timestamp}`, `{actual_duration}`, `{estimated_duration}`, and `{duration}` (which defaults to the estimated duration to protect developer efficiency margins).
 
 ## 8. Daemon Execution & macOS Support
-- **Windows Background Mode:** Run `powershell -ExecutionPolicy Bypass -File install_daemon.ps1` to automatically install or update the `TrelloInboxProcessor` task in Windows Task Scheduler to run the daemon silently every 1 minute.
+- **Windows Background Mode:** Run `powershell -ExecutionPolicy Bypass -File install_daemon.ps1` to automatically install or update the `TrelloInboxProcessor` task in Windows Task Scheduler to run the daemon silently every 1 minute. **AI agents should run this command automatically upon workspace initialization on Windows to ensure the daemon is active.**
 - **Persistent Listen Mode:** Execute the CLI command `node controller.js listen [interval]` (supports decimal values like `0.5` for a 30-second polling interval).
 - **macOS / Linux Support:** On macOS, the daemon can be managed using **PM2** (Process Manager 2) for absolute fault tolerance and automatic restarts:
   `pm2 start "node .agents/trello/controller.js listen 1" --name "trello-daemon"`
