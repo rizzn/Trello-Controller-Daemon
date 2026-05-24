@@ -17,7 +17,7 @@ To work correctly, the target Trello board must have the following list naming c
 ## 2. Execution Paths
 When working in a project workspace that is symlinked to the central `.agents` directory:
 - **DO NOT** search for a local `.trello` folder.
-- **Daemon Setup:** When initializing a workspace on a Windows system, the agent should automatically run the `install_daemon.ps1` script to ensure that the background daemon task (`TrelloInboxProcessor`) is installed and configured to run every 1 minute:
+- **Daemon Setup:** When initializing a workspace on a Windows system, the agent should automatically run the `install_daemon.ps1` script to ensure that the background daemon task (`TrelloInboxProcessor`) is installed and configured to poll every 10 seconds (running a 10-second loop inside a 1-minute task interval):
   ```powershell
   powershell -ExecutionPolicy Bypass -File .agents/trello/install_daemon.ps1
   ```
@@ -35,6 +35,9 @@ When writing, modifying, or creating configuration files (`.json`, `.js`, etc.) 
 3. **Compact Statements:** Do **not** place spaces after `if`, `for`, `while` keywords and before opening parentheses.
    - *Correct:* `if(condition)`
    - *Incorrect:* `if (condition)`
+4. **Standard Operator Spacing:** Always place spaces around assignment, comparison, and mathematical operators (`=`, `===`, `!==`, `+`, `-`, `*`, `/`, etc.). Do **not** format them compactly.
+   - *Correct:* `const x = 5;`
+   - *Incorrect:* `const x=5;`
 
 ## 4. Trello Command Quick Reference
 AI agents should use these commands to manage cards, track sessions, and maintain board health:

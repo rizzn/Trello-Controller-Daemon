@@ -1,5 +1,5 @@
 # Trello Controller Daemon - Windows Installation & Configuration Script
-# Runs the daemon silently in the background every 1 minute.
+# Registers a task to run silently every 1 minute, which executes a 10-second polling loop inside.
 
 $vbsPath = Resolve-Path (Join-Path $PSScriptRoot "run_silent.vbs") | Select-Object -ExpandProperty Path
 $taskName = "TrelloInboxProcessor"
@@ -32,4 +32,4 @@ $task.Triggers[0].Repetition.Interval = "PT1M"
 $task.Triggers[0].Repetition.Duration = "P365D"
 $task | Set-ScheduledTask
 
-Write-Host "Success! Trello Daemon task is configured to run silently every 1 minute." -ForegroundColor Green
+Write-Host "Success! Trello Daemon task is configured to run silently (polling every 10 seconds)." -ForegroundColor Green

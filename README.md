@@ -245,21 +245,21 @@ Start the runner to periodically poll and process incoming cards in the backgrou
 node /path/to/trello-controller-daemon/global_runner.js
 
 # Start persistent listen mode (runs in foreground, polling every X minutes)
-# Supports decimal values like 0.5 (for a 30-second interval)
-node /path/to/trello-controller-daemon/controller.js listen 0.5
+# Supports decimal values like 0.1667 (for a 10-second interval)
+node /path/to/trello-controller-daemon/controller.js listen 0.1667
 ```
 
 #### Windows Configuration
-To run it completely hidden in the background on Windows every 1 minute, you can simply run the automated PowerShell installer script in the daemon directory (no admin rights needed):
+To run it completely hidden in the background on Windows (polling every 10 seconds), you can simply run the automated PowerShell installer script in the daemon directory (no admin rights needed):
 ```powershell
 powershell -ExecutionPolicy Bypass -File install_daemon.ps1
 ```
-This automatically registers the task `TrelloInboxProcessor` in your Windows Task Scheduler to run the `run_silent.vbs` script every 1 minute.
+This automatically registers the task `TrelloInboxProcessor` in your Windows Task Scheduler to run the `run_silent.vbs` script every 1 minute, which executes a 10-second polling loop inside.
 
 #### macOS / Linux Configuration
 On macOS or Linux, you can manage the daemon using **PM2** (Process Manager 2) to ensure it stays active, restarts on system boot, and recovers from errors:
 ```bash
-pm2 start "node /path/to/trello-controller-daemon/controller.js listen 1" --name "trello-daemon"
+pm2 start "node /path/to/trello-controller-daemon/controller.js listen 0.1667" --name "trello-daemon"
 ```
 Alternatively, schedule it using macOS native `launchd` plist agents or `crontab -e`.
 

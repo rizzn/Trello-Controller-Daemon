@@ -17,67 +17,78 @@ if(!fs.existsSync(projectsPath)) {
 	process.exit(1);
 }
 
-try {
-	const projects=JSON.parse(fs.readFileSync(projectsPath,'utf8'));
-	const boards=projects.TRELLO_BOARDS||{};
-	const boardUrls=Object.keys(boards);
-	log(`Starting Trello inbox processing for ${boardUrls.length} board(s)...`);
+async function processAllBoards() {
+	try {
+		const projects=JSON.parse(fs.readFileSync(projectsPath,'utf8'));
+		const boards=projects.TRELLO_BOARDS||{};
+		const boardUrls=Object.keys(boards);
 
-	for(const boardUrl of boardUrls) {
-		const boardConfig=boards[boardUrl];
-		let boardDisplayName=boardUrl;
-		if(boardConfig.LOCAL_PROJECTS&&Array.isArray(boardConfig.LOCAL_PROJECTS)&&boardConfig.LOCAL_PROJECTS.length>0) {
-			const projectNames=boardConfig.LOCAL_PROJECTS.map(p=>p.name).filter(Boolean);
-			if(projectNames.length>0) {
-				boardDisplayName=`${boardUrl} (${projectNames.join(', ')})`;
-			}
-		}
-		log(`Processing board: ${boardDisplayName}...`);
-		
-		// If there are projects, use the first one's folder_path as cwd so that billing logs can be saved in the right workspace
-		// Otherwise, run in the script's directory (daemon context)
-		let runCwd=__dirname;
-		if(boardConfig.LOCAL_PROJECTS&&Array.isArray(boardConfig.LOCAL_PROJECTS)&&boardConfig.LOCAL_PROJECTS.length>0) {
-			const firstProject=boardConfig.LOCAL_PROJECTS[0];
-			if(firstProject&&firstProject.folder_path) {
-				const folder=firstProject.folder_path;
-				if(fs.existsSync(folder)) {
-					runCwd=folder;
+		for(const boardUrl of boardUrls) {
+			const boardConfig=boards[boardUrl];
+			let boardDisplayName=boardUrl;
+			if(boardConfig.LOCAL_PROJECTS&&Array.isArray(boardConfig.LOCAL_PROJECTS)&&boardConfig.LOCAL_PROJECTS.length>0) {
+				const projectNames=boardConfig.LOCAL_PROJECTS.map(p=>p.name).filter(Boolean);
+				if(projectNames.length>0) {
+					boardDisplayName=`${boardUrl} (${projectNames.join(', ')})`;
 				}
 			}
-		}
+			
+			let runCwd=__dirname;
+			if(boardConfig.LOCAL_PROJECTS&&Array.isArray(boardConfig.LOCAL_PROJECTS)&&boardConfig.LOCAL_PROJECTS.length>0) {
+				const firstProject=boardConfig.LOCAL_PROJECTS[0];
+				if(firstProject&&firstProject.folder_path) {
+					const folder=firstProject.folder_path;
+					if(fs.existsSync(folder)) {
+						runCwd=folder;
+					}
+				}
+			}
 
-		try {
-			// 1. Synchronize board labels and existing cards
-			const syncOutput=execSync(`node .agents/trello/controller.js sync`,{
-				cwd:runCwd,
-				env:{
-					...process.env,
-					TRELLO_BOARD_CONTEXT:boardUrl
-				},
-				encoding:'utf8',
-				stdio:'pipe'
-			});
-			log(`Sync result:\n${syncOutput.trim()}`);
+			try {
+				const syncOutput=execSync(`node .agents/trello/controller.js sync`,{
+					cwd:runCwd,
+					env:{
+						...process.env,
+						TRELLO_BOARD_CONTEXT:boardUrl
+					},
+					encoding:'utf8',
+					stdio:'pipe'
+				});
 
-			// 2. Process inbox
-			const inboxOutput=execSync(`node .agents/trello/controller.js inbox`,{
-				cwd:runCwd,
-				env:{
-					...process.env,
-					TRELLO_BOARD_CONTEXT:boardUrl
-				},
-				encoding:'utf8',
-				stdio:'pipe'
-			});
-			log(`Inbox result:\n${inboxOutput.trim()}`);
-		}
-		catch(error) {
-			log(`Error processing board ${boardUrl}:\n${error.stdout||error.message}`);
+				const inboxOutput=execSync(`node .agents/trello/controller.js inbox`,{
+					cwd:runCwd,
+					env:{
+						...process.env,
+						TRELLO_BOARD_CONTEXT:boardUrl
+					},
+					encoding:'utf8',
+					stdio:'pipe'
+				});
+			}
+			catch(error) {
+				log(`Error processing board ${boardUrl}:\n${error.stdout||error.message}`);
+			}
 		}
 	}
-	log('All boards processed.');
+	catch(e) {
+		log(`Critical error in global runner iteration: ${e.message}`);
+	}
 }
-catch(e) {
-	log(`Critical error in global runner: ${e.message}`);
+
+// Run 6 times, every 10 seconds (total 1 minute)
+async function startRunnerLoop() {
+	log('Starting Trello Daemon loop: 6 iterations, every 10 seconds...');
+	for(let i=0;i<6;i++) {
+		const iterationStart=Date.now();
+		log(`Iteration ${i+1}/6 started.`);
+		await processAllBoards();
+		const elapsed=Date.now()-iterationStart;
+		const sleepTime=10000-elapsed;
+		if(sleepTime>0&&i<5) {
+			await new Promise(resolve=>setTimeout(resolve,sleepTime));
+		}
+	}
+	log('Daemon loop completed.');
 }
+
+startRunnerLoop();
