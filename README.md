@@ -104,7 +104,34 @@ This ensures zero configuration overhead per workspace.
    }
    ```
 
-2. Create a `controller.json` file based on your board labels, prefixes, and list priorities.
+2. Create a `controller.json` file containing your board label priorities, prefix mappings, and custom automated message templates:
+   ```json
+   {
+     "priorityOrder": [
+       "Important",
+       "Bug",
+       "Feature",
+       "UI/UX",
+       "Refactor",
+       "Controlling"
+     ],
+     "labelMappings": [
+       {
+         "prefix": "[BUG]",
+         "color": "red",
+         "name": "Bug"
+       }
+     ],
+     "messages": {
+       "ticketReopened": "🔄 Ticket automatically reopened: A new email response was received.",
+       "emailUpdateReceived": "✉️ Email update received for ticket:",
+       "emailContentHeader": "Email Content",
+       "noEmailContent": "No email content",
+       "processingStarted": "Processing started at {timestamp}",
+       "processingCompleted": "Processing completed at {timestamp}. Estimated effort: {estimated_duration}."
+     }
+   }
+   ```
 
 #### How to find your Trello Board Email (`TRELLO_BOARD_EMAIL`):
 1. Open your Trello Board in your web browser.
@@ -213,20 +240,37 @@ active_ticket.json
 Start the runner to periodically poll and process incoming cards in the background:
 
 ```bash
+# Execute a single synchronization and inbox pass
 node /path/to/trello-controller-daemon/global_runner.js
+
+# Start persistent listen mode (runs in foreground, polling every X minutes)
+# Supports decimal values like 0.5 (for a 30-second interval)
+node /path/to/trello-controller-daemon/controller.js listen 0.5
 ```
 
-To run it completely hidden in the background on Windows, trigger `run_silent.vbs` via the Windows Task Scheduler.
+#### Windows Configuration
+To run it completely hidden in the background on Windows every 1 minute, you can simply run the automated PowerShell installer script in the daemon directory (no admin rights needed):
+```powershell
+powershell -ExecutionPolicy Bypass -File install_daemon.ps1
+```
+This automatically registers the task `TrelloInboxProcessor` in your Windows Task Scheduler to run the `run_silent.vbs` script every 1 minute.
 
-## Automatic Ticket Merging (Email Replies)
+#### macOS / Linux Configuration
+On macOS or Linux, you can manage the daemon using **PM2** (Process Manager 2) to ensure it stays active, restarts on system boot, and recovers from errors:
+```bash
+pm2 start "node /path/to/trello-controller-daemon/controller.js listen 1" --name "trello-daemon"
+```
+Alternatively, schedule it using macOS native `launchd` plist agents or `crontab -e`.
 
-To keep your board clean and organized, the background daemon automatically processes incoming email replies and threading updates:
+## Automatic Ticket Merging & Reopening (Email & Comment Replies)
 
-1. **Detection:** When a user replies to an existing ticket email, Trello creates a new card in the incoming list (e.g., `Re: [BUG] Video player crash`).
-2. **Title Normalization:** The daemon recursively strips standard email prefixes (`Re:`, `Aw:`, `Fwd:`, `WG:`, etc.) and Trello prefix labels (`[BUG]`, `[FEATURE]`, etc.) to find the matching original card title.
-3. **Email Reply Cleanup:** To prevent comment clutter, the daemon cleanses the email description. It automatically cuts out email signatures and previous thread history quotes (looking for indicators like `-----Original Message-----`, `Am ... schrieb`, `On ... wrote:`, `Von:`, `--`, `Gesendet mit`, etc.). Only the actual new response is posted.
-4. **Auto-Reopening:** If the matching original ticket is archived or currently residing in the **"Completed Tickets"** list, the daemon automatically restores it (unarchives it), moves it back to the **Inbox** (`Incoming Tickets`), and posts an alert comment (`🔄 Ticket automatisch wiedereröffnet: Eine neue E-Mail-Antwort wurde empfangen.`), ensuring that client feedback on resolved issues never gets missed.
-5. **Merging:** The daemon posts the cleaned body of the new reply as a comment on the original card, copies any attachments/files, triggers image embedding, and permanently deletes the duplicate incoming inbox card.
+To keep your board clean, professional, and organized, the background daemon automatically processes incoming email replies and Trello-native comments:
+
+1. **Email-to-Card Merging:** When a user replies to an existing ticket email and a new card is created (e.g., `Re: [BUG] Video player crash`), the daemon strips email/label prefixes, merges the message as a comment on the original card, transfers any attachments, and deletes the duplicate card.
+2. **Trello-Native Comments:** If a user replies to a notification email and Trello posts the message directly as a comment on the existing card, the daemon automatically detects and processes it.
+3. **Email Reply & Comment Cleanup:** To prevent comment clutter, the daemon automatically cleanses email descriptions and comments. It removes closing salutations (e.g., `Mit freundlichen Grüßen`, `Viele Grüße`, `Kind regards`), device signatures (e.g., `Gesendet von meinem iPhone`, `Gesendet aus Outlook`), and previous conversation history quoted underneath.
+4. **Auto-Reopening:** If the original ticket is archived or currently residing in the **"Completed Tickets"** list, the daemon automatically restores it (unarchives it) and moves it back to the **Inbox** (`Incoming Tickets`), posting a reopening notification comment.
+5. **Date Protection Check:** To prevent cards from being falsely reopened when you manually move them back to Completed Tickets or archive them, the daemon compares the comment's creation timestamp against the card's latest move-to-completed or archiving timestamp. The card is only reopened if the comment was posted *after* the move occurred.
 
 ## License
 

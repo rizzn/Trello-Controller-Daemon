@@ -53,10 +53,10 @@ When you, the AI agent, are working on a ticket, you must strictly follow this w
 1. **Start of Work:**
    - Locate the path defined under `billing_path` inside the matching project object in central `projects.json`.
    - Open that Markdown file and insert an active session row into the sessions table:
-     `| [Date] | [StartTime] | *Aktiv* | | | In Arbeit ([Ticket Title]) |`
+     `| [Date] | [StartTime] | *Active* | | | In Progress ([Ticket Title]) |`
    - Run the Trello start command:
      `node .agents/trello/controller.js start [shortLink]`
-   - **Multiple Tickets:** If working on multiple tickets in one session, list them all in the description column (e.g. `In Arbeit (Ticket A & Ticket B)`) and run the `start` command for each of them.
+   - **Multiple Tickets:** If working on multiple tickets in one session, list them all in the description column (e.g. `In Progress (Ticket A & Ticket B)`) and run the `start` command for each of them.
 
 2. **End of Work / Completion:**
    - Completed cards on Trello are moved to the **"Completed Tickets"** list (or the list configured in `TRELLO_LIST_COMPLETED`). They are **never** archived automatically by this command.
@@ -67,11 +67,29 @@ When you, the AI agent, are working on a ticket, you must strictly follow this w
      `node .agents/trello/controller.js complete [otherShortLink]`
      This moves those cards to the **"Completed Tickets"** list on Trello. Since the first call already closed the active session row, subsequent calls will complete without duplicating logbook entries.
    - Ensure the generated billing line item matches the formatting rules specified in the project's `billing-rules.md` (e.g., German language, clear customer value, no technical jargon).
-
-## 6. Automatic Ticket Merging (Replies via Email)
-The daemon automatically merges email replies/updates sent to the board's email address into existing cards if they match.
+## 6. Automatic Ticket Merging & Reopening (Email & Comment Replies)
+The daemon automatically merges email replies/updates sent to the board's email address and scans recent board comments to clean up email signatures and handle ticket reopening.
 - **Title Normalization:** The daemon strips common email prefixes (`Re:`, `Aw:`, `Fwd:`, `WG:`, etc.) and label prefixes (`[BUG]`, `[FEATURE]`, etc.) to find matching original cards.
-- **Email Reply Cleanup:** To prevent clutter, the daemon automatically cleanses incoming email descriptions. It strips out signature blocks and previous conversation history (truncating text below markers like `-----Original Message-----`, `Am ... schrieb`, `On ... wrote:`, `Von:`, `--`, `Gesendet mit`, etc.), ensuring only the new response is posted.
-- **Auto-Reopen Feature:** If a match is found but the original card has already been archived or moved to the **"Completed Tickets"** list, the daemon automatically restores it (unarchives if needed), moves it back to the **Inbox** (`Incoming Tickets`), and posts a notification comment (`🔄 Ticket automatisch wiedereröffnet: Eine neue E-Mail-Antwort wurde empfangen.`).
-- **Merging Action:** If a match is found, the cleaned body of the new email card is added as a comment to the existing card. Any attachments are transferred to the original card (and embedded in the description), and the temporary inbox card is deleted.
-- **Workflow Benefit:** Users can simply reply to previous emails, and updates will be threaded directly as comments under the corresponding active card. If they reply to a closed ticket, it is automatically resurrected and brought to the developer's attention.
+- **Email Reply & Comment Cleanup:** To prevent clutter, the daemon automatically cleanses incoming email descriptions and Trello-native comments. It strips out signature blocks, closing salutations (e.g., `Mit freundlichen Grüßen`, `Kind regards`), device signatures (e.g., `Gesendet von meinem iPhone`), and previous conversation history (truncating text below markers like `-----Original Message-----`, `Am ... schrieb`, `On ... wrote:`, `Von:`, `--`, `Gesendet mit`, etc.), ensuring only the new response is posted.
+- **Auto-Reopen Feature:** If a match is found, or if a user comments on an existing card, and that card has already been archived or moved to the **"Completed Tickets"** list, the daemon automatically restores it (unarchives if needed) and moves it back to the **Inbox** (`Incoming Tickets`).
+- **Date Protection Check:** To prevent cards from being falsely reopened when they are manually moved back to Completed Tickets or archived, the daemon compares the comment's creation date against the card's latest move-to-completed or archiving timestamp. It only reopens the card if the comment is strictly newer than the completion move.
+- **Merging Action:** If a new email card is matched to an existing one, the cleaned body is added as a comment, attachments are transferred (and embedded), and the duplicate inbox card is deleted.
+- **Workflow Benefit:** Users can simply reply to previous emails. Updates will be threaded directly as comments under the corresponding active card. If they reply to a closed ticket, it is automatically resurrected and brought back to the Inbox.
+
+## 7. Global Configuration & Message Templates
+The daemon loads label priorities, prefix mappings, and user-facing Trello comments from the global `controller.json` file.
+- **Message templates (`messages`):** Customizes comments posted to Trello:
+  - `ticketReopened`: Posted when a closed card is reopened by an email reply.
+  - `emailUpdateReceived`: Header for incoming merged email comments.
+  - `emailContentHeader`: Label for the email text block.
+  - `noEmailContent`: Fallback for empty email descriptions.
+  - `processingStarted`: Comment posted when starting a card (`start`). Supports the `{timestamp}` placeholder.
+  - `processingCompleted`: Comment posted when completing a card (`complete`). Supports `{timestamp}`, `{actual_duration}`, `{estimated_duration}`, and `{duration}` (which defaults to the estimated duration to protect developer efficiency margins).
+
+## 8. Daemon Execution & macOS Support
+- **Windows Background Mode:** Run `powershell -ExecutionPolicy Bypass -File install_daemon.ps1` to automatically install or update the `TrelloInboxProcessor` task in Windows Task Scheduler to run the daemon silently every 1 minute.
+- **Persistent Listen Mode:** Execute the CLI command `node controller.js listen [interval]` (supports decimal values like `0.5` for a 30-second polling interval).
+- **macOS / Linux Support:** On macOS, the daemon can be managed using **PM2** (Process Manager 2) for absolute fault tolerance and automatic restarts:
+  `pm2 start "node .agents/trello/controller.js listen 1" --name "trello-daemon"`
+  Alternatively, macOS native **Launchd** or **Cron** (`crontab -e`) can be used to run the runner process at scheduled intervals.
+

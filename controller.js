@@ -83,6 +83,13 @@ if(fs.existsSync(globalConfigPath)) {
 
 const priorityOrder=globalConfig.priorityOrder||['Important','Bug','Feature','UI/UX','Refactor','Controlling'];
 const labelMappings=globalConfig.labelMappings||[];
+const messages=globalConfig.messages||{};
+const MSG_TICKET_REOPENED=messages.ticketReopened||"🔄 Ticket automatically reopened: A new email response was received.";
+const MSG_EMAIL_UPDATE=messages.emailUpdateReceived||"✉️ Email update received for ticket:";
+const MSG_EMAIL_CONTENT=messages.emailContentHeader||"Email Content";
+const MSG_NO_EMAIL_CONTENT=messages.noEmailContent||"No email content";
+const MSG_PROCESSING_STARTED=messages.processingStarted||"Processing started at {timestamp}";
+const MSG_PROCESSING_COMPLETED=messages.processingCompleted||"Processing completed at {timestamp}. Estimated effort: {estimated_duration}.";
 const INBOX_LIST_NAME=config.TRELLO_LIST_INCOMING||'Incoming Tickets';
 const ACTIVE_LIST_NAME=config.TRELLO_LIST_ACTIVE||'Active Tickets';
 const COMPLETED_LIST_NAME=config.TRELLO_LIST_COMPLETED||'Completed Tickets';
@@ -281,7 +288,7 @@ async function startCard(cardShortLink) {
         await apiRequest('PUT', `/cards/${card.id}?idList=${targetList.id}&pos=top`);
         
         const timestamp = new Date().toLocaleString('de-DE');
-        const commentText = `Processing started at ${timestamp}`;
+        const commentText = MSG_PROCESSING_STARTED.replace('{timestamp}', timestamp);
         console.log(`Adding comment: "${commentText}"`);
         await apiRequest('POST', `/cards/${card.id}/actions/comments`, { text: commentText });
         
@@ -564,7 +571,9 @@ function cleanEmailBody(body) {
 		/^\s*gesendet\s+mit\s+/i,
 		/^\s*original\s+message/i,
 		/^\s*ursprüngliche\s+nachricht/i,
-		/^\s*--\s*$/
+		/^\s*--\s*$/,
+		/^\s*(mit\s+freundlichen\s+grüßen|viele\s+grüße|liebe\s+grüße|kind\s+regards|best\s+regards|regards|sincerely)\s*,?\s*$/i,
+		/^\s*(gesendet\s+von|gesendet\s+aus)\s+/i
 	];
 	for(const line of lines) {
 		if(cutSignatures.some(regex=>regex.test(line))) {
@@ -612,8 +621,8 @@ async function searchAndMerge(incomingCard,allCards,inboxList,lists) {
 	if(matchedCard) {
 		console.log(`  -> Match found! Merging [${incomingCard.shortLink}] into existing card [${matchedCard.shortLink}] ("${matchedCard.name}")`);
 		const cleanedDesc=cleanEmailBody(incomingCard.desc);
-		const senderInfo=cleanedDesc?`\n\n**Inhalt der E-Mail:**\n${cleanedDesc}`:'\n*(Kein E-Mail-Inhalt)*';
-		const commentText=`✉️ **E-Mail-Update erhalten für das Ticket:**\n"${incomingCard.name}"${senderInfo}`;
+		const senderInfo=cleanedDesc?`\n\n**${MSG_EMAIL_CONTENT}:**\n${cleanedDesc}`:`\n*(${MSG_NO_EMAIL_CONTENT})*`;
+		const commentText=`${MSG_EMAIL_UPDATE}\n"${incomingCard.name}"${senderInfo}`;
 		await apiRequest('POST',`/cards/${matchedCard.id}/actions/comments`,{text:commentText});
 		try {
 			const attachments=await apiRequest('GET',`/cards/${incomingCard.id}/attachments`);
@@ -633,7 +642,7 @@ async function searchAndMerge(incomingCard,allCards,inboxList,lists) {
 		if(matchedCard.closed||(completedList&&matchedCard.idList===completedList.id)) {
 			console.log(`  -> Original card was completed/archived. Reopening and moving to Inbox...`);
 			await apiRequest('PUT',`/cards/${matchedCard.id}`,{idList:inboxList.id,closed:false});
-			await apiRequest('POST',`/cards/${matchedCard.id}/actions/comments`,{text:`🔄 **Ticket automatisch wiedereröffnet:** Eine neue E-Mail-Antwort wurde empfangen.`});
+			await apiRequest('POST',`/cards/${matchedCard.id}/actions/comments`,{text:MSG_TICKET_REOPENED});
 		}
 		
 		console.log(`  -> Deleting temporary inbox card [${incomingCard.shortLink}]...`);
@@ -653,16 +662,92 @@ async function processInbox() {
 			return;
 		}
 		
+		const allCards=await apiRequest('GET',`/boards/${boardId}/cards?filter=all`);
+		const completedList=lists.find(l=>l.name.toLowerCase().includes(COMPLETED_LIST_NAME.toLowerCase()));
+		
+		// Clean and process recent comment actions on the board (e.g. to handle email-to-card comments & reopens)
+		console.log('Checking recent board comments for email signatures or reopening triggers...');
+		try {
+			const recentActions=await apiRequest('GET',`/boards/${boardId}/actions?filter=commentCard&limit=25`);
+			for(const action of recentActions) {
+				const text=action.data.text;
+				if(!text) continue;
+				
+				// 1. Check if comment needs signature cleaning
+				const cleaned=cleanEmailBody(text);
+				if(cleaned!==text) {
+					console.log(`  -> Found uncleaned comment [${action.id}] on card "${action.data.card.name}". Cleaning...`);
+					try {
+						await apiRequest('PUT',`/actions/${action.id}`,{text:cleaned});
+						action.data.text=cleaned;
+					} catch(err) {
+						console.error(`  -> Failed to clean comment [${action.id}]:`,err.message||err);
+					}
+				}
+				
+				// 2. Check if the card is in Completed Tickets or archived and this comment is a new user comment
+				const cardId=action.data.card.id;
+				const card=allCards.find(c=>c.id===cardId);
+				if(card) {
+					if(card.closed||(completedList&&card.idList===completedList.id)) {
+						const isSystemComment=cleaned.includes("Ticket automatically reopened") || 
+						                      cleaned.includes("Processing completed") || 
+						                      cleaned.includes("Processing started") ||
+						                      cleaned.includes("Email update received");
+						
+						if(!isSystemComment) {
+							let shouldReopen=true;
+							try {
+								const cardActions=await apiRequest('GET',`/cards/${card.id}/actions?filter=updateCard&limit=15`);
+								const moveAction=cardActions.find(a=>{
+									if(a.type==='updateCard') {
+										if(a.data&&a.data.listAfter&&a.data.listAfter.id===completedList.id) {
+											return true;
+										}
+										if(a.data&&a.data.old&&a.data.old.hasOwnProperty('closed')&&a.data.card&&a.data.card.closed===true) {
+											return true;
+										}
+									}
+									return false;
+								});
+								if(moveAction) {
+									const commentTime=new Date(action.date).getTime();
+									const moveTime=new Date(moveAction.date).getTime();
+									if(commentTime<=moveTime) {
+										shouldReopen=false;
+									}
+								}
+							} catch(actionErr) {
+								console.error(`  -> Failed to check card update actions for [${card.shortLink}]:`,actionErr.message||actionErr);
+							}
+							
+							if(shouldReopen) {
+								console.log(`  -> New user comment detected on completed/archived card [${card.shortLink}] (comment time is newer than list move time). Reopening and moving to Inbox...`);
+								await apiRequest('PUT',`/cards/${card.id}`,{idList:inboxList.id,closed:false});
+								await apiRequest('POST',`/cards/${card.id}/actions/comments`,{text:MSG_TICKET_REOPENED});
+								card.idList=inboxList.id;
+								card.closed=false;
+							} else {
+								console.log(`  -> Skipping reopen for [${card.shortLink}]: Comment was created before the card was moved to Completed/Archived.`);
+							}
+						}
+					}
+				}
+			}
+		} catch(actionErr) {
+			console.error('Error processing board comments:',actionErr.message||actionErr);
+		}
+		
 		console.log(`Fetching cards from inbox list "${inboxList.name}"...`);
 		const cards=await apiRequest('GET',`/lists/${inboxList.id}/cards`);
 		
 		if(cards.length===0) {
 			console.log('No new email tickets in the inbox.');
+			console.log('\x1b[32mInbox processing completed successfully!\x1b[0m');
 			return;
 		}
 		
 		console.log(`Found ${cards.length} ticket(s) in the inbox. Processing...`);
-		const allCards=await apiRequest('GET',`/boards/${boardId}/cards`);
 		
 		for(const card of cards) {
 			console.log(`\nProcessing ticket: "${card.name}" [${card.shortLink}]`);
@@ -859,7 +944,21 @@ async function completeSession(cardShortLink, manualTimeEstimate = '') {
         // Update the session line in the logbook
         lines[activeLineIndex] = `| ${dateStr} | ${startTimeStr} | ${endTimeStr} | ${actualTimeText} | ${estTimeText} | Erledigt (${card.name}) |`;
         
-        // 4. Generate billing item entry
+        // 4. Post completion comment on Trello
+        const nowFormatted = now.toLocaleString('de-DE');
+        const completionComment = MSG_PROCESSING_COMPLETED
+            .replace('{timestamp}', nowFormatted)
+            .replace('{actual_duration}', actualTimeText)
+            .replace('{estimated_duration}', estTimeText)
+            .replace('{duration}', estTimeText);
+        console.log(`Adding Trello comment: "${completionComment}"`);
+        try {
+            await apiRequest('POST', `/cards/${card.id}/actions/comments`, { text: completionComment });
+        } catch (commentErr) {
+            console.error('Error posting completion comment:', commentErr.message || commentErr);
+        }
+        
+        // 5. Generate billing item entry
         const billingItem = `
 ### [${dateStr}] Session: ${card.name}
 *   **Tatsächliche Entwicklungszeit mit KI & Review:** ${actualTimeText} (${startTimeStr} - ${endTimeStr} Uhr)
@@ -1095,7 +1194,7 @@ else if(command === 'sync') {
     syncLabelsAndCards();
 }
 else if(command === 'listen') {
-    const interval = parseInt(args[1]) || 5;
+    const interval = parseFloat(args[1]) || 5;
     listenInbox(interval);
 }
 else if(command === 'news' || command === 'unread') {

@@ -43,5 +43,13 @@
 			"color":"yellow",
 			"name":"Refactor"
 		}
-	]
+	],
+	"messages":{
+		"ticketReopened":"🔄 Ticket automatically reopened: A new email response was received.",
+		"emailUpdateReceived":"✉️ Email update received for ticket:",
+		"emailContentHeader":"Email Content",
+		"noEmailContent":"No email content",
+		"processingStarted":"Processing started at {timestamp}",
+		"processingCompleted":"Processing completed at {timestamp}. Estimated effort: {estimated_duration}."
+	}
 }
