@@ -1262,10 +1262,13 @@ function showProjects() {
 		} else {
 			for(const p of localProjects) {
 				const folderExists=fs.existsSync(p.folder_path);
-				let symlinkStatus='\x1b[31mMissing .agents Symlink\x1b[0m';
+				let symlinkStatus = '\x1b[31mMissing .agents Symlink\x1b[0m';
 				if(folderExists) {
 					const symlinkPath=path.join(p.folder_path,'.agents');
-					if(fs.existsSync(symlinkPath)) {
+					const normalizedPath = p.folder_path.replace(/\\/g, '/').toLowerCase();
+					if (normalizedPath.includes('/.agents/') || normalizedPath.endsWith('/.agents')) {
+						symlinkStatus='\x1b[32mNot Required (Inside .agents)\x1b[0m';
+					} else if(fs.existsSync(symlinkPath)) {
 						try {
 							const stats=fs.lstatSync(symlinkPath);
 							if(stats.isSymbolicLink()) {
@@ -1280,9 +1283,13 @@ function showProjects() {
 				}
 				
 				console.log(`  - \x1b[1m${p.name}\x1b[0m`);
-				const robustBillingPath = getRobustBillingPath(p.billing_path);
 				console.log(`    Path:    ${p.folder_path} (${folderExists?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
-				console.log(`    Log:     ${robustBillingPath} (${fs.existsSync(robustBillingPath)?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
+				if (p.billing_path === '-') {
+					console.log(`    Log:     \x1b[33mDisabled\x1b[0m`);
+				} else {
+					const robustBillingPath = getRobustBillingPath(p.billing_path);
+					console.log(`    Log:     ${robustBillingPath} (${fs.existsSync(robustBillingPath)?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
+				}
 				console.log(`    Status:  ${symlinkStatus}`);
 			}
 		}

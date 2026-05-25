@@ -45,7 +45,7 @@ async function processAllBoards() {
 			}
 
 			try {
-				const syncOutput=execSync(`node .agents/trello/controller.js sync`,{
+				const syncOutput=execSync(`node "${path.join(__dirname,'controller.js')}" sync`,{
 					cwd:runCwd,
 					env:{
 						...process.env,
@@ -55,7 +55,17 @@ async function processAllBoards() {
 					stdio:'pipe'
 				});
 
-				const inboxOutput=execSync(`node .agents/trello/controller.js inbox`,{
+				const inboxOutput=execSync(`node "${path.join(__dirname,'controller.js')}" inbox`,{
+					cwd:runCwd,
+					env:{
+						...process.env,
+						TRELLO_BOARD_CONTEXT:boardUrl
+					},
+					encoding:'utf8',
+					stdio:'pipe'
+				});
+
+				const sortOutput=execSync(`node "${path.join(__dirname,'controller.js')}" sort`,{
 					cwd:runCwd,
 					env:{
 						...process.env,
