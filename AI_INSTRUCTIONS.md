@@ -1,10 +1,10 @@
 # AI Agent Instructions: Trello Controller Daemon
 
-This file provides context and strict rules for AI agents and LLMs (such as Gemini, Antigravity, Cursor, Cline, etc.) working on or with this codebase.
+This file provides context and strict rules for AI agents and LLMs (such as Gemini, Antigravity, Cursor, Cline, etc.) working with or on this codebase.
 
 ## 1. Project Overview & Architecture
 This repository contains a lightweight, zero-dependency Node.js tool to control Trello boards via CLI or daemon.
-- `controller.js`: Main CLI tool. Loads dynamic configuration from `projects.json` (matching `process.cwd()` against `folder_path` defined in board-specific `LOCAL_PROJECTS` objects, or via `TRELLO_BOARD_CONTEXT` env variable) and board settings from `controller.json`.
+- `controller.js`: Main CLI tool. Loads dynamic configuration from `projects.json` (matching `process.cwd()` against `folder_path` defined in board-specific `LOCAL_PROJECTS` objects, or falling back to the base directory name if the exact path differs—ideal for Desktop/Laptop synchronization. It also matches the `billing_path` with a fallback search in the relative `.agents/billing/` directory if the absolute path does not exist). Board settings are loaded from `controller.json`.
 - `global_runner.js`: The background daemon script. Iterates through all registered Trello board URLs in `projects.json` and runs `sync` followed by `inbox`.
 - `run_silent.vbs`: Stealth starter for Windows Task Scheduler.
 
@@ -45,14 +45,25 @@ AI agents should use these commands to manage cards, track sessions, and maintai
 | Command | Usage | Description |
 | :--- | :--- | :--- |
 | `list` | `node .agents/trello/controller.js list` | Show board lists and cards. |
+| `add` | `node .agents/trello/controller.js add "Title" ["Desc"] ["ListName"]` | Create a new card with automatic label assignment. |
+| `move` | `node .agents/trello/controller.js move [shortLink] "ListName"` | Move a card to another list. |
+| `start` | `node .agents/trello/controller.js start [shortLink]` | Move a card to "Active Tickets", track start time, create local `active_ticket.json`. |
+| `complete` | `node .agents/trello/controller.js complete [shortLink] "[estTime]"` | Move card to "Completed Tickets", calculate actual time, log billing session. |
+| `check` | `node .agents/trello/controller.js check [shortLink] "ItemName"` | Add a checklist item to a card. |
+| `check-done` | `node .agents/trello/controller.js check-done [shortLink] "ItemName"` | Mark a checklist item as completed and update local JSON. |
+| `label` | `node .agents/trello/controller.js label [shortLink] [Color] ["LabelName"]` | Add a label to a card. |
+| `comment` | `node .agents/trello/controller.js comment [shortLink] "Text"` | Add a comment to a card. |
+| `archive` | `node .agents/trello/controller.js archive [shortLink]` | Archive a card. |
+| `delete` | `node .agents/trello/controller.js delete [shortLink]` | Permanently delete a card. |
+| `search` | `node .agents/trello/controller.js search "Query"` | Search for cards on the board. |
+| `inbox` | `node .agents/trello/controller.js inbox` | Run manual incoming ticket & email merging logic. |
 | `sync` | `node .agents/trello/controller.js sync` | Synchronize board labels & clean card title prefixes board-wide. |
-| `inbox` | `node .agents/trello/controller.js inbox` | Process the incoming ticket inbox list. |
-| `start` | `node .agents/trello/controller.js start [shortLink]` | Move a card to "Working on" and track the start time. |
-| `complete` | `node .agents/trello/controller.js complete [shortLink] "[estTime]"` | Move card to "Implemented", calculate duration, log session. |
-| `check-done` | `node .agents/trello/controller.js check-done [shortLink] "[itemName]"` | Mark a checklist item as completed. |
-| `backup` | `node .agents/trello/controller.js backup` | Export board state to `board_backup.txt`. |
+| `listen` | `node .agents/trello/controller.js listen [intervalMinutes]` | Start the persistent inbox polling daemon in the foreground. |
+| `news` / `unread` | `node .agents/trello/controller.js news [peek]` | Show new/unread tickets across all boards. Use `peek` to list without updating LAST_CHECKED. |
+| `status` | `node .agents/trello/controller.js status` | Display the status of the background daemon process and scheduled task. |
+| `projects` | `node .agents/trello/controller.js projects` | List registered projects, paths, and `.agents` symlink status. |
+| `backup` | `node .agents/trello/controller.js backup` | Export the current board layout to `board_backup.txt`. |
 | `sort` | `node .agents/trello/controller.js sort` | Sort cards in lists based on priorities. |
-| `news` | `node .agents/trello/controller.js news [peek]` | Show new/unread tickets across all boards. Use `peek` to list without updating the LAST_CHECKED timestamp. |
 
 ## 5. AI Session & Billing Workflow Guidelines
 When you, the AI agent, are working on a ticket, you must strictly follow this workflow to document and log your sessions:
