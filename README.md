@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="logo.png" alt="Trello Controller Daemon Logo" width="100%">
-</p>
+<img src="logo.png" alt="Trello Controller Daemon Logo" width="100%">
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT License">
