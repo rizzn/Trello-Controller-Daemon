@@ -1,4 +1,4 @@
-<img src="logo.png" alt="Trello Controller Daemon Logo" width="100%">
+![Trello Controller Daemon Logo](logo.png)
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT License">
