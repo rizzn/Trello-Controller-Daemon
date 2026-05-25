@@ -13,6 +13,7 @@ if(fs.existsSync(projectsPath)) {
 		projects=JSON.parse(fs.readFileSync(projectsPath,'utf8'));
 		const boards=projects.TRELLO_BOARDS||{};
 		const currentPath=process.cwd().replace(/\\/g,'/').toLowerCase();
+		const currentFolder=path.basename(process.cwd()).toLowerCase();
 		const boardContext=process.env.TRELLO_BOARD_CONTEXT;
 		
 		let matchedKey;
@@ -26,6 +27,9 @@ if(fs.existsSync(projectsPath)) {
 				// See if the current directory matches any project under this board to resolve billing path
 				if(boardConfig.LOCAL_PROJECTS&&Array.isArray(boardConfig.LOCAL_PROJECTS)) {
 					matchedProject=boardConfig.LOCAL_PROJECTS.find(p=>p.folder_path&&p.folder_path.replace(/\\/g,'/').toLowerCase()===currentPath);
+					if(!matchedProject) {
+						matchedProject=boardConfig.LOCAL_PROJECTS.find(p=>p.folder_path&&path.basename(p.folder_path).toLowerCase()===currentFolder);
+					}
 					if(!matchedProject&&boardConfig.LOCAL_PROJECTS.length>0) {
 						matchedProject=boardConfig.LOCAL_PROJECTS[0];
 					}
@@ -39,6 +43,9 @@ if(fs.existsSync(projectsPath)) {
 				const boardConfig = boards[k];
 				if(boardConfig.LOCAL_PROJECTS && Array.isArray(boardConfig.LOCAL_PROJECTS)) {
 					matchedProject = boardConfig.LOCAL_PROJECTS.find(p => p.folder_path && p.folder_path.replace(/\\/g,'/').toLowerCase() === currentPath);
+					if(!matchedProject) {
+						matchedProject = boardConfig.LOCAL_PROJECTS.find(p => p.folder_path && path.basename(p.folder_path).toLowerCase() === currentFolder);
+					}
 					return !!matchedProject;
 				}
 				return false;
@@ -177,6 +184,26 @@ function getEmlContent(cardId,attachmentId,fileName) {
 }
 
 // Core functions
+function getRobustBillingPath(logFilename) {
+	if(!logFilename) logFilename = 'billing-log.md';
+	let billingLogPath;
+	if(path.isAbsolute(logFilename)) {
+		billingLogPath = logFilename;
+		if(!fs.existsSync(billingLogPath)) {
+			const fallbackPath = path.join(__dirname,'..','billing',path.basename(logFilename));
+			if(fs.existsSync(fallbackPath)) {
+				billingLogPath = fallbackPath;
+			}
+		}
+	} else {
+		billingLogPath = path.join(process.cwd(),'.agents','billing',logFilename);
+		if(!fs.existsSync(billingLogPath)) {
+			billingLogPath = path.join(__dirname,'..','billing',logFilename);
+		}
+	}
+	return billingLogPath;
+}
+
 function printContext() {
 	console.log('\x1b[35m==================================================\x1b[0m');
 	console.log('\x1b[35m⚡ TRELLO CONTROLLER - ACTIVE CONTEXT ⚡\x1b[0m');
@@ -187,16 +214,7 @@ function printContext() {
 		console.log('\x1b[36mProject:\x1b[0m    Unregistered Workspace');
 	}
 	console.log(`\x1b[36mBoard URL:\x1b[0m  ${BOARD_URL}`);
-	const logFilename = config.BILLING_LOG_FILE || 'billing-log.md';
-	let billingLogPath;
-	if(path.isAbsolute(logFilename)) {
-		billingLogPath = logFilename;
-	} else {
-		billingLogPath = path.join(process.cwd(),'.agents','billing',logFilename);
-		if(!fs.existsSync(billingLogPath)) {
-			billingLogPath = path.join(__dirname,'..','billing',logFilename);
-		}
-	}
+	const billingLogPath = getRobustBillingPath(config.BILLING_LOG_FILE);
 	const hasLog = fs.existsSync(billingLogPath);
 	console.log(`\x1b[36mLog File:\x1b[0m   ${billingLogPath} (${hasLog?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
 	console.log('\x1b[35m==================================================\x1b[0m\n');
@@ -979,16 +997,7 @@ async function completeSession(cardShortLink,manualTimeEstimate='') {
 		}
 		
 		// 2. Read billing log (try local project folder first, fallback to script directory)
-		const logFilename=config.BILLING_LOG_FILE||'billing-log.md';
-		let billingLogPath;
-		if(path.isAbsolute(logFilename)) {
-			billingLogPath=logFilename;
-		} else {
-			billingLogPath=path.join(process.cwd(),'.agents','billing',logFilename);
-			if(!fs.existsSync(billingLogPath)) {
-				billingLogPath=path.join(__dirname,'..','billing',logFilename);
-			}
-		}
+		const billingLogPath = getRobustBillingPath(config.BILLING_LOG_FILE);
 		
 		if(!fs.existsSync(billingLogPath)) {
 			console.log('Notice: billing log file does not exist, skipping automatic log entry.');
@@ -1271,8 +1280,9 @@ function showProjects() {
 				}
 				
 				console.log(`  - \x1b[1m${p.name}\x1b[0m`);
+				const robustBillingPath = getRobustBillingPath(p.billing_path);
 				console.log(`    Path:    ${p.folder_path} (${folderExists?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
-				console.log(`    Log:     ${p.billing_path} (${fs.existsSync(p.billing_path)?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
+				console.log(`    Log:     ${robustBillingPath} (${fs.existsSync(robustBillingPath)?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
 				console.log(`    Status:  ${symlinkStatus}`);
 			}
 		}

@@ -105,6 +105,12 @@ This ensures zero configuration overhead per workspace.
    }
    ```
 
+> [!NOTE]
+> **Cross-Platform & Laptop Portability:**
+> To ensure seamless synchronization between different machines (e.g., Desktop and Laptop via Dropbox) where absolute paths might differ:
+> - **Folder Path Fallback:** If the current working directory path does not exactly match `folder_path` in `projects.json` (due to different drive letters or parent folders), the controller automatically falls back to matching the base directory name (e.g. `project-a`).
+> - **Billing Path Fallback:** If an absolute `billing_path` is specified but does not exist on the current machine (e.g., pointing to drive `E:` instead of `C:`), the controller automatically falls back to searching for the log file's filename inside the global `.agents/billing/` directory.
+
 2. Create a `controller.json` file containing your board label priorities, prefix mappings, and custom automated message templates:
    ```json
    {
@@ -149,26 +155,52 @@ To ensure the automated workflows function correctly, your Trello board must con
 
 ## Usage
 
-Navigate to any registered project directory in your terminal and call the script:
+Navigate to any registered project directory in your terminal and execute `controller.js`.
+
+### CLI Command Quick Reference
+
+| Command | Usage | Description |
+| :--- | :--- | :--- |
+| `list` | `node .agents/trello/controller.js list` | Show board lists and cards. |
+| `add` | `node .agents/trello/controller.js add "Title" ["Desc"] ["ListName"]` | Create a new card with automatic label assignment. |
+| `move` | `node .agents/trello/controller.js move [shortLink] "ListName"` | Move a card to another list. |
+| `start` | `node .agents/trello/controller.js start [shortLink]` | Move a card to "Active Tickets", track start time, create local `active_ticket.json`. |
+| `complete` | `node .agents/trello/controller.js complete [shortLink] "[estTime]"` | Move card to "Completed Tickets", calculate actual time, log billing session. |
+| `check` | `node .agents/trello/controller.js check [shortLink] "ItemName"` | Add a checklist item to a card. |
+| `check-done` | `node .agents/trello/controller.js check-done [shortLink] "ItemName"` | Mark a checklist item as completed and update local JSON. |
+| `label` | `node .agents/trello/controller.js label [shortLink] [Color] ["LabelName"]` | Add a label to a card. |
+| `comment` | `node .agents/trello/controller.js comment [shortLink] "Text"` | Add a comment to a card. |
+| `archive` | `node .agents/trello/controller.js archive [shortLink]` | Archive a card. |
+| `delete` | `node .agents/trello/controller.js delete [shortLink]` | Permanently delete a card. |
+| `search` | `node .agents/trello/controller.js search "Query"` | Search for cards on the board. |
+| `inbox` | `node .agents/trello/controller.js inbox` | Run manual incoming ticket & email merging logic. |
+| `sync` | `node .agents/trello/controller.js sync` | Synchronize board labels & clean card title prefixes board-wide. |
+| `listen` | `node .agents/trello/controller.js listen [intervalMinutes]` | Start the persistent inbox polling daemon in the foreground. |
+| `news` / `unread` | `node .agents/trello/controller.js news [peek]` | Show new/unread tickets across all boards. Use `peek` to list without updating LAST_CHECKED. |
+| `status` | `node .agents/trello/controller.js status` | Display the status of the background daemon process and scheduled task. |
+| `projects` | `node .agents/trello/controller.js projects` | List registered projects, paths, and `.agents` symlink status. |
+| `backup` | `node .agents/trello/controller.js backup` | Export the current board layout to `board_backup.txt`. |
+| `sort` | `node .agents/trello/controller.js sort` | Sort cards in lists based on priorities. |
+
+### CLI Examples:
 
 ```bash
 # List all cards grouped by list
-node /path/to/trello-controller-daemon/controller.js list
+node .agents/trello/controller.js list
 
 # Synchronize labels and clean prefixes board-wide
-node /path/to/trello-controller-daemon/controller.js sync
+node .agents/trello/controller.js sync
 
 # Add a card to the "Release v1.0" list with automatic labeling
-node /path/to/trello-controller-daemon/controller.js add "Release v1.0" "[BUG] Button is not working on mobile"
+node .agents/trello/controller.js add "Release v1.0" "[BUG] Button is not working on mobile"
 
 # Move a card to a different list
-node /path/to/trello-controller-daemon/controller.js move "shortLink" "Active Tickets"
+node .agents/trello/controller.js move "shortLink" "Active Tickets"
 
 # Show new/unread incoming tickets across all registered boards
-# Use "news peek" to view them without marking them as read (updating last_checked)
-node /path/to/trello-controller-daemon/controller.js news
-node /path/to/trello-controller-daemon/controller.js news peek
+node .agents/trello/controller.js news
 ```
+
 
 ### Session Tracking & Billing Workflow
 
