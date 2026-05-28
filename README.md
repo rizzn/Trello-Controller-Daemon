@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.jpg" alt="Trello Controller Daemon Logo" width="500">
+  <img src="logo.png" alt="Trello Controller Daemon Logo" width="500">
 </p>
 <!-- logo-ref -->
 
@@ -164,6 +164,7 @@ Navigate to any registered project directory in your terminal and execute `contr
 | :--- | :--- | :--- |
 | `list` | `node .agents/trello/controller.js list` | Show board lists and cards. |
 | `add` | `node .agents/trello/controller.js add "Title" ["Desc"] ["ListName"]` | Create a new card with automatic label assignment. |
+| `desc` | `node .agents/trello/controller.js desc [shortLink] "Description"` | Update a card's description. |
 | `move` | `node .agents/trello/controller.js move [shortLink] "ListName"` | Move a card to another list. |
 | `start` | `node .agents/trello/controller.js start [shortLink]` | Move a card to "Active Tickets", track start time, create local `active_ticket.json`. |
 | `complete` | `node .agents/trello/controller.js complete [shortLink] "[estTime]"` | Move card to "Completed Tickets", calculate actual time, log billing session. |
@@ -288,6 +289,10 @@ To run it completely hidden in the background on Windows (polling every 10 secon
 powershell -ExecutionPolicy Bypass -File install_daemon.ps1
 ```
 This automatically registers the task `TrelloInboxProcessor` in your Windows Task Scheduler to run the `run_silent.vbs` script every 1 minute, which executes a 10-second polling loop inside.
+
+You can also control the daemon using the new helper scripts:
+- **Start / Enable Daemon:** `.\start-trello.ps1`
+- **Stop / Disable Daemon:** `.\stop-trello.ps1`
 
 #### macOS / Linux Configuration
 On macOS or Linux, you can manage the daemon using **PM2** (Process Manager 2) to ensure it stays active, restarts on system boot, and recovers from errors:
