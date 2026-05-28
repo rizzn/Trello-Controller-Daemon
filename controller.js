@@ -444,6 +444,17 @@ async function addComment(cardShortLink,text) {
 	}
 }
 
+async function editCardDesc(cardShortLink, desc) {
+	try {
+		const card = await apiRequest('GET', `/cards/${cardShortLink}`);
+		console.log(`Updating description for card [${cardShortLink}] "${card.name}"...`);
+		await apiRequest('PUT', `/cards/${card.id}`, { desc: desc });
+		console.log('\x1b[32mCard description successfully updated!\x1b[0m');
+	} catch(error) {
+		console.error(error);
+	}
+}
+
 async function addCheckItem(cardShortLink,itemName) {
 	try {
 		const card=await apiRequest('GET',`/cards/${cardShortLink}`);
@@ -1356,6 +1367,15 @@ else if(command === 'comment') {
     }
     addComment(cardLink, text);
 }
+else if(command === 'desc') {
+    const cardLink = args[1];
+    const desc = args[2];
+    if(!cardLink || !desc) {
+        console.error('Usage: node trello.js desc "shortLink" "NewDescription"');
+        process.exit(1);
+    }
+    editCardDesc(cardLink, desc);
+}
 else if(command === 'check') {
     const cardLink = args[1];
     const itemName = args[2];
@@ -1425,5 +1445,5 @@ else if(command === 'projects') {
 	showProjects();
 }
 else {
-	console.log('Unknown command. Available: list, add, move, start, archive, delete, label, comment, check, check-done, search, complete, backup, sort, inbox, listen, sync, news, status, projects');
+	console.log('Unknown command. Available: list, add, desc, move, start, archive, delete, label, comment, check, check-done, search, complete, backup, sort, inbox, listen, sync, news, status, projects');
 }
