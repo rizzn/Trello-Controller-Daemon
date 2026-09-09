@@ -797,18 +797,18 @@ async function processInbox() {
 						                      cleaned.includes("Email update received");
 						
 						if(!isSystemComment) {
-							let shouldReopen=true;
+							let shouldReopen=false;
 							try {
 								let cardActions;
 								if(cardActionsCache[card.id]) {
 									cardActions=cardActionsCache[card.id];
 								} else {
-									cardActions=await apiRequest('GET',`/cards/${card.id}/actions?filter=updateCard&limit=15`);
+									cardActions=await apiRequest('GET',`/cards/${card.id}/actions?filter=updateCard&limit=50`);
 									cardActionsCache[card.id]=cardActions;
 								}
-								const moveAction=cardActions.find(a=>{
+								const moveAction=Array.isArray(cardActions)&&cardActions.find(a=>{
 									if(a.type==='updateCard') {
-										if(a.data&&a.data.listAfter&&a.data.listAfter.id===completedList.id) {
+										if(a.data&&a.data.listAfter&&completedList&&a.data.listAfter.id===completedList.id) {
 											return true;
 										}
 										if(a.data&&a.data.old&&a.data.old.hasOwnProperty('closed')&&a.data.card&&a.data.card.closed===true) {
@@ -820,8 +820,8 @@ async function processInbox() {
 								if(moveAction) {
 									const commentTime=new Date(action.date).getTime();
 									const moveTime=new Date(moveAction.date).getTime();
-									if(commentTime<=moveTime) {
-										shouldReopen=false;
+									if(commentTime>moveTime) {
+										shouldReopen=true;
 									}
 								}
 							} catch(actionErr) {
