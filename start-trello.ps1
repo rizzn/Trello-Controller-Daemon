@@ -8,7 +8,7 @@ Write-Host "==================================================" -ForegroundColor
 Write-Host ""
 
 # Check if Trello runner is already running
-$trelloRunner = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '[\\/]trello[\\/]global_runner\.js' }
+$trelloRunner = Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match '[\\/]trello[\\/]global_runner\.js' }
 if ($trelloRunner) {
     Write-Host "[-] Trello Inbox Processor is already running (PID: $($trelloRunner.ProcessId)). Skipping start." -ForegroundColor Yellow
 } else {
