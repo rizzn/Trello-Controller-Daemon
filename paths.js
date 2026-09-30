@@ -1,7 +1,7 @@
 /*
  File Name:     paths.js
  Description:   Drive-agnostic path resolution for projects.json entries
- Author:        Stephan Riedl
+ Author:        rizzn
 */
 
 const fs = require('fs');

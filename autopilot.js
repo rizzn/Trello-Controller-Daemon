@@ -1,7 +1,7 @@
 /*
  File Name:     autopilot.js
  Description:   One-shot pipeline: Trello card (label-gated) -> start -> headless coding agent -> checks -> complete -> Telegram report
- Author:        Stephan Riedl
+ Author:        rizzn
 */
 
 const fs = require('fs');

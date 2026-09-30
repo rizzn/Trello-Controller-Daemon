@@ -10,3 +10,6 @@ logo.psd
 .DS_Store
 Thumbs.db
 autopilot.log
+
+# Local regression tests (not shipped)
+.tests/
