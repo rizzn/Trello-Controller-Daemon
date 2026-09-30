@@ -20,18 +20,32 @@ if(fs.existsSync(projectsPath)) {
 		let matchedProject;
 		
 		if(boardContext) {
-			// Find config directly by board URL/key
-			matchedKey=Object.keys(boards).find(k=>k.toLowerCase()===boardContext.toLowerCase()||k.includes(boardContext));
+			const bLower = boardContext.toLowerCase();
+			// Find config directly by board URL/key or by project name
+			matchedKey = Object.keys(boards).find(k => {
+				if(k.toLowerCase() === bLower || k.toLowerCase().includes(bLower)) {
+					return true;
+				}
+				const bConfig = boards[k];
+				if(bConfig.LOCAL_PROJECTS && Array.isArray(bConfig.LOCAL_PROJECTS)) {
+					return bConfig.LOCAL_PROJECTS.some(p => p.name && (p.name.toLowerCase() === bLower || p.name.toLowerCase().includes(bLower) || bLower.includes(p.name.toLowerCase())));
+				}
+				return false;
+			});
+
 			if(matchedKey) {
-				const boardConfig=boards[matchedKey];
-				// See if the current directory matches any project under this board to resolve billing path
-				if(boardConfig.LOCAL_PROJECTS&&Array.isArray(boardConfig.LOCAL_PROJECTS)) {
-					matchedProject=boardConfig.LOCAL_PROJECTS.find(p=>p.folder_path&&p.folder_path.replace(/\\/g,'/').toLowerCase()===currentPath);
+				const boardConfig = boards[matchedKey];
+				// See if project matches context name or current directory
+				if(boardConfig.LOCAL_PROJECTS && Array.isArray(boardConfig.LOCAL_PROJECTS)) {
+					matchedProject = boardConfig.LOCAL_PROJECTS.find(p => p.name && (p.name.toLowerCase() === bLower || p.name.toLowerCase().includes(bLower) || bLower.includes(p.name.toLowerCase())));
 					if(!matchedProject) {
-						matchedProject=boardConfig.LOCAL_PROJECTS.find(p=>p.folder_path&&path.basename(p.folder_path).toLowerCase()===currentFolder);
+						matchedProject = boardConfig.LOCAL_PROJECTS.find(p => p.folder_path && p.folder_path.replace(/\\/g, '/').toLowerCase() === currentPath);
 					}
-					if(!matchedProject&&boardConfig.LOCAL_PROJECTS.length>0) {
-						matchedProject=boardConfig.LOCAL_PROJECTS[0];
+					if(!matchedProject) {
+						matchedProject = boardConfig.LOCAL_PROJECTS.find(p => p.folder_path && path.basename(p.folder_path).toLowerCase() === currentFolder);
+					}
+					if(!matchedProject && boardConfig.LOCAL_PROJECTS.length > 0) {
+						matchedProject = boardConfig.LOCAL_PROJECTS[0];
 					}
 				}
 			}
