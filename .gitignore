@@ -12,4 +12,4 @@ Thumbs.db
 autopilot.log
 
 # Local regression tests (not shipped)
-.tests/
+tests/

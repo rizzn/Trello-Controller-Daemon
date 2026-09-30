@@ -118,7 +118,7 @@ The daemon loads label priorities, prefix mappings, and user-facing Trello comme
 - Token values are defined at the top of `projects.json` in `PATH_VARS`: a hostname key (`os.hostname()`, e.g. `DESKTOP-OQQVOEP`) per machine, optional `"*"` for all machines. Drive letters live only there. Precedence: host block > `"*"` > process environment > built-in `AGENTS_ROOT`. Values may use tokens themselves (`"%AGENTS_ROOT%/../htdocs"`).
 - If a token cannot be resolved, matching falls back to the last path segment against the current folder name (`pec`), so running from inside the project always works.
 - `billing_path` uses the `%BILLING_PATH%` token (`"%BILLING_PATH%/billing-log-pec.md"`), defined in the `"*"` block of `PATH_VARS` as `%AGENTS_ROOT%/billing`; `-` disables billing. A bare file name or an unresolvable path falls back to `.agents/billing/<file name>`.
-- Resolution lives in [`paths.js`](paths.js); regression tests: `node --test ".agents/tools/trello/.tests/*.test.js"`.
+- Resolution lives in [`paths.js`](paths.js); regression tests: `node --test ".agents/tools/trello/tests/*.test.js"`.
 
 ## 10. Autopilot (Trello -> headless agent -> billing -> Telegram)
 [`autopilot.js`](autopilot.js) processes exactly one card per run:
