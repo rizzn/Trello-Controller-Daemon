@@ -10,13 +10,16 @@ const {spawnSync} = require('child_process');
 const {AGENTS_ROOT, findProject, resolveWorkspaceRoot, resolveBillingPath, toAgentsRelative} = require('./paths.js');
 
 const CONTROLLER = path.join(__dirname, 'controller.js');
-const TELEGRAM = path.join(AGENTS_ROOT, 'telegram', 'controller.js');
+// Sibling tool folder: tools/trello <-> tools/telegram
+const TELEGRAM_DIR = path.join(__dirname, '..', 'telegram');
+const TELEGRAM = path.join(TELEGRAM_DIR, 'controller.js');
 const PROJECTS_PATH = path.join(__dirname, 'projects.json');
 const LOG_PATH = path.join(__dirname, 'autopilot.log');
 const ACTIVE_MARKER = /\*(Active|Aktiv)\*|\bIn (Progress|Arbeit)\b/;
 
 const DEFAULTS = {
 	label: 'Autopilot',
+	labelColor: 'sky',
 	agentCommand: 'claude',
 	agentArgs: ['-p', '--permission-mode', 'acceptEdits', '--allowedTools', 'Read,Edit,Write,Glob,Grep', '--output-format', 'json'],
 	agentTimeoutMinutes: 30,
@@ -127,7 +130,7 @@ function hasLabel(card, label) {
 	return (card.labels || []).some(l => (l.name || '').toLowerCase() === label.toLowerCase());
 }
 
-async function pickCard(api, boardUrl, board, opts, label) {
+async function pickCard(api, boardUrl, board, opts, label, labelColor = 'sky') {
 	const boardId = (boardUrl.match(/\/b\/([^\/]+)/) || [])[1] || boardUrl;
 	const incomingName = (board.TRELLO_LIST_INCOMING || 'Incoming Tickets').toLowerCase();
 	const lists = await api(`/boards/${boardId}/lists?fields=name`);
@@ -142,10 +145,13 @@ async function pickCard(api, boardUrl, board, opts, label) {
 		}
 		if(!hasLabel(card, label) && opts.approve && !opts.dryRun) {
 			// Explicit approval (Telegram /go): attach the existing board label, create it only once
-			const labels = await api(`/boards/${boardId}/labels?fields=name`);
+			const labels = await api(`/boards/${boardId}/labels?fields=name,color`);
 			let target = labels.find(l => (l.name || '').toLowerCase() === label.toLowerCase());
 			if(!target) {
-				target = await api(`/boards/${boardId}/labels?name=${encodeURIComponent(label)}&color=sky`, 'POST');
+				target = await api(`/boards/${boardId}/labels?name=${encodeURIComponent(label)}&color=${encodeURIComponent(labelColor)}`, 'POST');
+			}
+			else if(target.color !== labelColor) {
+				await api(`/labels/${target.id}?color=${encodeURIComponent(labelColor)}`, 'PUT');
 			}
 			await api(`/cards/${encodeURIComponent(opts.card)}/idLabels?value=${target.id}`, 'POST');
 			card.labels = [...(card.labels || []), target];
@@ -288,7 +294,7 @@ function dispatchAgent(root, ticket, settings) {
 
 // ==================== TELEGRAM ====================
 function notify(text) {
-	const cfg = readJson(path.join(AGENTS_ROOT, 'telegram', 'config.json'), null);
+	const cfg = readJson(path.join(TELEGRAM_DIR, 'config.json'), null);
 	const chatId = cfg && (cfg.NOTIFY_CHAT_ID || (cfg.ALLOWED_USER_IDS || [])[0]);
 	if(!chatId || !fs.existsSync(TELEGRAM)) {
 		log('Telegram notification skipped (no config/chat id).');
@@ -305,7 +311,7 @@ const opts = parseArgs(process.argv.slice(2));
 
 async function main() {
 	if(opts.help) {
-		console.log('Usage: node .agents/trello/autopilot.js [--board <project|board>] [--card <shortLink> [--approve]] [--dry-run]');
+		console.log('Usage: node .agents/tools/trello/autopilot.js [--board <project|board>] [--card <shortLink> [--approve]] [--dry-run]');
 		console.log('Without --board the project is resolved from the current directory.');
 		console.log('--approve attaches the gate label to --card (explicit human approval, e.g. Telegram /go).');
 		return;
@@ -346,7 +352,7 @@ async function main() {
 
 	// 4. Card selection (label gate)
 	const api = trelloClient(projects, board);
-	const card = await pickCard(api, boardUrl, board, opts, settings.label);
+	const card = await pickCard(api, boardUrl, board, opts, settings.label, settings.labelColor);
 	if(!card) {
 		log(`${ctx} Keine Karte mit Label "${settings.label}" in der Inbox.`);
 		if(!opts.dryRun) {

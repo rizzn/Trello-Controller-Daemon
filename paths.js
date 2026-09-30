@@ -8,8 +8,16 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-// Root of the central .agents folder (resolved through the symlink, if any)
-const AGENTS_ROOT = path.join(__dirname, '..');
+/* ROOT OF THE CENTRAL .agents FOLDER: FIRST ANCESTOR NAMED .agents (SYMLINKS ARE ALREADY RESOLVED), ELSE tools/<tool>/../.. */
+function findAgentsRoot(dir) {
+	for(let d = dir; d !== path.dirname(d); d = path.dirname(d)) {
+		if(path.basename(d).toLowerCase() === '.agents') {
+			return d;
+		}
+	}
+	return path.join(dir, '..', '..');
+}
+const AGENTS_ROOT = findAgentsRoot(__dirname);
 const PROJECTS_PATH = path.join(__dirname, 'projects.json');
 
 /* PATH_VARS FROM projects.json: "*" APPLIES EVERYWHERE, A HOSTNAME KEY OVERRIDES IT ON THAT MACHINE */

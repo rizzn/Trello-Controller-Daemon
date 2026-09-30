@@ -11,7 +11,7 @@ Write-Host "[*] Disabling TrelloInboxProcessor task..." -ForegroundColor Cyan
 schtasks /change /tn "TrelloInboxProcessor" /disable >$null 2>&1
 
 Write-Host "[*] Terminating active Trello Node.js runners..." -ForegroundColor Cyan
-Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*global_runner.js*" -or $_.CommandLine -like "*controller.js*" } | ForEach-Object {
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '[\\/]trello[\\/](global_runner|controller)\.js' } | ForEach-Object {
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
 }
 

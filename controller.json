@@ -46,6 +46,7 @@
 	],
 	"autopilot":{
 		"label":"Autopilot",
+		"labelColor":"sky",
 		"agentCommand":"claude",
 		"agentArgs":["-p","--permission-mode","acceptEdits","--allowedTools","Read,Edit,Write,Glob,Grep","--output-format","json"],
 		"agentTimeoutMinutes":30,

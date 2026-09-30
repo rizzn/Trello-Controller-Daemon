@@ -416,14 +416,46 @@ async function deleteCard(cardShortLink) {
 	}
 }
 
-async function addLabel(cardShortLink,color,name='') {
+const TRELLO_COLORS=['green','yellow','orange','red','purple','blue','sky','lime','pink','black'];
+
+function isTrelloColor(value) {
+	const base=String(value||'').toLowerCase().replace(/_(light|dark)$/,'');
+	return TRELLO_COLORS.includes(base);
+}
+
+// label <shortLink> <Color> [Name] | label <shortLink> <Name>: reuses the board label with that name, creates it only once
+async function addLabel(cardShortLink,colorOrName,name='') {
 	try {
+		let color=colorOrName;
+		if(!isTrelloColor(colorOrName)) {
+			name=[colorOrName,name].filter(Boolean).join(' ');
+			color='';
+		}
 		const card=await apiRequest('GET',`/cards/${cardShortLink}`);
-		console.log(`Adding label "${color}" (${name||'no name'}) to card [${cardShortLink}]...`);
-		await apiRequest('POST',`/cards/${card.id}/labels?color=${color}&name=${name}`);
+		const boardLabels=await apiRequest('GET',`/boards/${card.idBoard}/labels?fields=name,color&limit=1000`);
+		let label=name
+			?boardLabels.find(l=>(l.name||'').toLowerCase()===name.toLowerCase())
+			:boardLabels.find(l=>!l.name&&l.color===color);
+		if(!label) {
+			const mapping=labelMappings.find(m=>m.name.toLowerCase()===name.toLowerCase());
+			color=color||(mapping&&mapping.color)||'sky';
+			console.log(`Creating board label "${name||color}" (${color})...`);
+			label=await apiRequest('POST',`/boards/${card.idBoard}/labels?name=${encodeURIComponent(name)}&color=${encodeURIComponent(color)}`);
+		}
+		else if(color&&label.color!==color) {
+			console.log(`Updating label "${label.name||label.color}" color ${label.color} -> ${color}...`);
+			await apiRequest('PUT',`/labels/${label.id}?color=${encodeURIComponent(color)}`);
+		}
+		if((card.idLabels||[]).includes(label.id)) {
+			console.log(`Card [${cardShortLink}] already has label "${label.name||label.color}".`);
+			return;
+		}
+		console.log(`Adding label "${label.name||label.color}" to card [${cardShortLink}]...`);
+		await apiRequest('POST',`/cards/${card.id}/idLabels?value=${label.id}`);
 		console.log('\x1b[32mLabel successfully added!\x1b[0m');
 	} catch(error) {
 		console.error(error);
+		process.exitCode = 1;
 	}
 }
 
@@ -1349,9 +1381,9 @@ else if(command === 'delete') {
 else if(command === 'label') {
     const cardLink = args[1];
     const color = args[2];
-    const labelName = args[3] || '';
+    const labelName = args.slice(3).join(' ');
     if(!cardLink || !color) {
-        console.error('Usage: node trello.js label "shortLink" "Color" ["LabelName"]');
+        console.error('Usage: node trello.js label "shortLink" "Color" ["LabelName"]  |  label "shortLink" "LabelName"');
         process.exit(1);
     }
     addLabel(cardLink, color, labelName);
