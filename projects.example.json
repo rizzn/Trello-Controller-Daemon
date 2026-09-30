@@ -1,7 +1,8 @@
 {
 	"PATH_VARS":{
 		"*":{
-			"HTDOCS":"%AGENTS_ROOT%/../htdocs"
+			"HTDOCS":"%AGENTS_ROOT%/../htdocs",
+			"BILLING_PATH":"%AGENTS_ROOT%/billing"
 		},
 		"YOUR-HOSTNAME":{
 			"HTDOCS":"C:/xampp/htdocs",
@@ -20,7 +21,7 @@
 				{
 					"name":"Project-A",
 					"folder_path":"%HTDOCS%/project-a",
-					"billing_path":"billing-log-project-a.md"
+					"billing_path":"%BILLING_PATH%/billing-log-project-a.md"
 				}
 			],
 			"LAST_CHECKED":null
@@ -34,7 +35,7 @@
 				{
 					"name":"Project-B",
 					"folder_path":"%AGENTS_ROOT%/project-b",
-					"billing_path":"billing-log-project-b.md"
+					"billing_path":"%BILLING_PATH%/billing-log-project-b.md"
 				}
 			],
 			"LAST_CHECKED":null
