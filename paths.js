@@ -1,9 +1,3 @@
-/*
- File Name:     paths.js
- Description:   Drive-agnostic path resolution for projects.json entries
- Author:        rizzn
-*/
-
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
