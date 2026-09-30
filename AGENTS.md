@@ -4,9 +4,9 @@ This file provides context and strict rules for AI agents and LLMs (such as Gemi
 
 ## 1. Project Overview & Architecture
 This repository contains a lightweight, zero-dependency Node.js tool to control Trello boards via CLI or daemon.
-- `controller.js`: Main CLI tool. Loads dynamic configuration from `projects.json` (matching `process.cwd()` against `folder_path` defined in board-specific `LOCAL_PROJECTS` objects, or falling back to the base directory name if the exact path differs—ideal for Desktop/Laptop synchronization. It also matches the `billing_path` with a fallback search in the relative `.agents/billing/` directory if the absolute path does not exist). Board settings are loaded from `controller.json`.
-- `global_runner.js`: The background daemon script. Iterates through all registered Trello board URLs in `projects.json` and runs `sync` followed by `inbox`.
-- `run_silent.vbs`: Stealth starter for Windows Task Scheduler.
+- [`controller.js`](controller.js): Main CLI tool. Loads dynamic configuration from `projects.json` (matching `process.cwd()` against `folder_path` defined in board-specific `LOCAL_PROJECTS` objects, or falling back to the base directory name if the exact path differs—ideal for Desktop/Laptop synchronization. It also matches the `billing_path` with a fallback search in the relative `.agents/billing/` directory if the absolute path does not exist). Board settings are loaded from [`controller.json`](controller.json).
+- [`global_runner.js`](global_runner.js): The background daemon script. Iterates through all registered Trello board URLs in `projects.json` and runs `sync` followed by `inbox`.
+- [`run_silent.vbs`](run_silent.vbs): Stealth starter for Windows Task Scheduler.
 
 ### Board List Requirements
 To work correctly, the target Trello board must have the following list naming conventions:
@@ -16,8 +16,8 @@ To work correctly, the target Trello board must have the following list naming c
 
 ## 2. Execution Paths
 When working in a project workspace that is symlinked to the central `.agents` directory:
-- **DO NOT** search for a local `.trello` folder.
-- **Daemon Setup:** When initializing a workspace on a Windows system, the agent should automatically run the `install_daemon.ps1` script to ensure that the background daemon task (`TrelloInboxProcessor`) is installed and configured to poll every 10 seconds (running a 10-second loop inside a 1-minute task interval):
+- **Single source of truth:** Project configurations and board mappings live exclusively in `projects.json` (git-ignored, holds the credentials). No local `.trello` directory exists or should be inspected.
+- **Daemon Setup:** When initializing a workspace on a Windows system, the agent should automatically run the [`install_daemon.ps1`](install_daemon.ps1) script to ensure that the background daemon task (`TrelloInboxProcessor`) is installed and configured to poll every 10 seconds (running a 10-second loop inside a 1-minute task interval):
   ```powershell
   powershell -ExecutionPolicy Bypass -File .agents/trello/install_daemon.ps1
   ```
@@ -84,7 +84,7 @@ When you, the AI agent, are working on a ticket, you must strictly follow this w
    - Run the `complete` command for any **remaining tickets** associated with the same session:
      `node .agents/trello/controller.js complete [otherShortLink]`
      This moves those cards to the **"Completed Tickets"** list on Trello. Since the first call already closed the active session row, subsequent calls will complete without duplicating logbook entries.
-   - Ensure the generated billing line item matches the formatting rules specified in the project's `billing-rules.md` (e.g., German language, clear customer value, no technical jargon).
+   - Ensure the generated billing line item matches the formatting rules specified in `.agents/rules/billing-rules.md` (e.g., German language, clear customer value, no technical jargon).
 ## 6. Automatic Ticket Merging & Reopening (Email & Comment Replies)
 The daemon automatically merges email replies/updates sent to the board's email address and scans recent board comments to clean up email signatures and handle ticket reopening.
 - **Title Normalization:** The daemon strips common email prefixes (`Re:`, `Aw:`, `Fwd:`, `WG:`, etc.) and label prefixes (`[BUG]`, `[FEATURE]`, etc.) to find matching original cards.
@@ -96,7 +96,7 @@ The daemon automatically merges email replies/updates sent to the board's email 
 - **Workflow Benefit:** Users can simply reply to previous emails. Updates will be threaded directly as comments under the corresponding active card. If they reply to a closed ticket, it is automatically resurrected and brought back to the Inbox.
 
 ## 7. Global Configuration & Message Templates
-The daemon loads label priorities, prefix mappings, and user-facing Trello comments from the global `controller.json` file.
+The daemon loads label priorities, prefix mappings, and user-facing Trello comments from the global [`controller.json`](controller.json) file.
 - **Message templates (`messages`):** Customizes comments posted to Trello:
   - `ticketReopened`: Posted when a closed card is reopened by an email reply.
   - `emailUpdateReceived`: Header for incoming merged email comments.
