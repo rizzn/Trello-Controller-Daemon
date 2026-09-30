@@ -112,3 +112,27 @@ The daemon loads label priorities, prefix mappings, and user-facing Trello comme
   `pm2 start "node .agents/trello/controller.js listen 1" --name "trello-daemon"`
   Alternatively, macOS native **Launchd** or **Cron** (`crontab -e`) can be used to run the runner process at scheduled intervals.
 
+
+## 9. Portable Paths
+- `folder_path` in `projects.json` never contains a drive letter. Supported tokens: `%VAR%`, `${VAR}`, `~` and the built-in `%AGENTS_ROOT%` (the central `.agents` folder). Example: `"folder_path": "%HTDOCS%/pec"`.
+- Token values are defined at the top of `projects.json` in `PATH_VARS`: a hostname key (`os.hostname()`, e.g. `DESKTOP-OQQVOEP`) per machine, optional `"*"` for all machines. Drive letters live only there. Precedence: host block > `"*"` > process environment > built-in `AGENTS_ROOT`. Values may use tokens themselves (`"%AGENTS_ROOT%/../htdocs"`).
+- If a token cannot be resolved, matching falls back to the last path segment against the current folder name (`pec`), so running from inside the project always works.
+- `billing_path` is a bare file name (`billing-log-pec.md`) resolved into `.agents/billing/`; `-` disables billing.
+- Resolution lives in [`paths.js`](paths.js); regression tests: `node --test ".agents/trello/test/*.test.js"`.
+
+## 10. Autopilot (Trello -> headless agent -> billing -> Telegram)
+[`autopilot.js`](autopilot.js) processes exactly one card per run:
+1. Resolves the project via `--board <project|board>` or the current folder, then the workspace root (see section 9).
+2. Aborts if `active_ticket.json` exists in the root (running session or unresolved roadblock) or if tracked files are uncommitted.
+3. Picks the top card in the Incoming list carrying the gate label (`autopilot.label` in `controller.json`, default `Autopilot`). Cards created by email are never processed without that label. `--card <shortLink> --approve` attaches the label as explicit approval (used by Telegram `/go`).
+4. Opens a `*Active*` row in the billing log (if billing is active), runs `controller.js start`.
+5. Pipes the ticket to the agent CLI (`autopilot.agentCommand` / `agentArgs`; default `claude -p` with Read/Edit/Write/Glob/Grep only, no Bash) via stdin.
+6. Runs `npm test` / `npm run lint` if defined in the project `package.json`, collects `git diff --shortstat` against the base hash. It never commits.
+7. Success: `controller.js complete` (card -> Completed, billing row closed, Rechnungsposition appended). Roadblock: card stays in Active, `active_ticket.json` stays as lock, the billing row is removed (no billing for failed runs).
+8. Reports via `node .agents/telegram/controller.js send <NOTIFY_CHAT_ID>`; a summary is also posted as Trello comment.
+
+```powershell
+node .agents/trello/autopilot.js --dry-run
+node .agents/trello/autopilot.js --board pec-website
+node .agents/trello/autopilot.js --board pec-website --card AbCd1234 --approve
+```

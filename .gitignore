@@ -9,3 +9,4 @@ logo.psd
 # OS system files
 .DS_Store
 Thumbs.db
+autopilot.log

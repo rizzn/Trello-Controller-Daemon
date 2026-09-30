@@ -44,6 +44,14 @@
 			"name":"Refactor"
 		}
 	],
+	"autopilot":{
+		"label":"Autopilot",
+		"agentCommand":"claude",
+		"agentArgs":["-p","--permission-mode","acceptEdits","--allowedTools","Read,Edit,Write,Glob,Grep","--output-format","json"],
+		"agentTimeoutMinutes":30,
+		"checkTimeoutMinutes":10,
+		"checks":["test","lint"]
+	},
 	"messages":{
 		"ticketReopened":"🔄 Ticket automatically reopened: A new email response was received.",
 		"emailUpdateReceived":"✉️ Email update received for ticket:",

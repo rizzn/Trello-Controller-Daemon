@@ -1,25 +1,57 @@
 {
+	"PATH_VARS":{
+		"*":{
+			"HTDOCS":"%AGENTS_ROOT%/../htdocs"
+		},
+		"YOUR-HOSTNAME":{
+			"HTDOCS":"C:/xampp/htdocs",
+			"AGENTS_ROOT":"C:/path/to/.agents"
+		}
+	},
 	"TRELLO_KEY":"your_trello_api_key",
 	"TRELLO_TOKEN":"your_trello_member_token",
 	"TRELLO_BOARDS":{
-		"https://trello.com/b/board_short_id/board_name":{
-			"TRELLO_BOARD_EMAIL":"your_board_email@boards.trello.com",
+		"https://trello.com/b/boardId1/project-a":{
+			"TRELLO_BOARD_EMAIL":"your_board_email_a@boards.trello.com",
 			"TRELLO_LIST_INCOMING":"Incoming Tickets",
 			"TRELLO_LIST_ACTIVE":"Active Tickets",
 			"TRELLO_LIST_COMPLETED":"Completed Tickets",
 			"LOCAL_PROJECTS":[
 				{
-					"name":"Project A",
-					"folder_path":"C:/path/to/your/project-a",
-					"billing_path":"C:/path/to/billing-log-a.md"
-				},
-				{
-					"name":"Project B",
-					"folder_path":"C:/path/to/your/project-b",
-					"billing_path":"C:/path/to/billing-log-b.md"
+					"name":"Project-A",
+					"folder_path":"%HTDOCS%/project-a",
+					"billing_path":"billing-log-project-a.md"
 				}
 			],
-			"LAST_CHECKED":""
+			"LAST_CHECKED":null
+		},
+		"https://trello.com/b/boardId2/project-b":{
+			"TRELLO_BOARD_EMAIL":"your_board_email_b@boards.trello.com",
+			"TRELLO_LIST_INCOMING":"Incoming Tickets",
+			"TRELLO_LIST_ACTIVE":"Active Tickets",
+			"TRELLO_LIST_COMPLETED":"Completed Tickets",
+			"LOCAL_PROJECTS":[
+				{
+					"name":"Project-B",
+					"folder_path":"%AGENTS_ROOT%/project-b",
+					"billing_path":"billing-log-project-b.md"
+				}
+			],
+			"LAST_CHECKED":null
+		},
+		"https://trello.com/b/boardId3/board-only":{
+			"TRELLO_BOARD_EMAIL":"your_board_email_c@boards.trello.com",
+			"TRELLO_LIST_INCOMING":"Incoming Tickets",
+			"TRELLO_LIST_ACTIVE":"Active Tickets",
+			"TRELLO_LIST_COMPLETED":"Completed Tickets",
+			"LOCAL_PROJECTS":[
+				{
+					"name":"Board-Only",
+					"folder_path":"-",
+					"billing_path":"-"
+				}
+			],
+			"LAST_CHECKED":null
 		}
 	}
 }

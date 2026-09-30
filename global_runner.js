@@ -1,6 +1,7 @@
 const fs=require('fs');
 const path=require('path');
 const {execSync}=require('child_process');
+const {expandPath}=require('./paths.js');
 
 const projectsPath=path.join(__dirname,'projects.json');
 const logPath=path.join(__dirname,'runner.log');
@@ -37,8 +38,8 @@ async function processAllBoards() {
 			if(boardConfig.LOCAL_PROJECTS&&Array.isArray(boardConfig.LOCAL_PROJECTS)&&boardConfig.LOCAL_PROJECTS.length>0) {
 				const firstProject=boardConfig.LOCAL_PROJECTS[0];
 				if(firstProject&&firstProject.folder_path) {
-					const folder=firstProject.folder_path;
-					if(fs.existsSync(folder)) {
+					const folder=expandPath(firstProject.folder_path);
+					if(folder&&fs.existsSync(folder)) {
 						runCwd=folder;
 					}
 				}

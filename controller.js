@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const {execSync} = require('child_process');
+const {expandPath, findProject, projectMatchesDir, resolveBillingPath, toAgentsRelative} = require('./paths.js');
 
 // 1. Load configuration from the central projects.json
 const projectsPath=path.join(__dirname,'projects.json');
@@ -12,8 +13,6 @@ if(fs.existsSync(projectsPath)) {
 	try {
 		projects=JSON.parse(fs.readFileSync(projectsPath,'utf8'));
 		const boards=projects.TRELLO_BOARDS||{};
-		const currentPath=process.cwd().replace(/\\/g,'/').toLowerCase();
-		const currentFolder=path.basename(process.cwd()).toLowerCase();
 		const boardContext=process.env.TRELLO_BOARD_CONTEXT;
 		
 		let matchedKey;
@@ -39,10 +38,7 @@ if(fs.existsSync(projectsPath)) {
 				if(boardConfig.LOCAL_PROJECTS && Array.isArray(boardConfig.LOCAL_PROJECTS)) {
 					matchedProject = boardConfig.LOCAL_PROJECTS.find(p => p.name && (p.name.toLowerCase() === bLower || p.name.toLowerCase().includes(bLower) || bLower.includes(p.name.toLowerCase())));
 					if(!matchedProject) {
-						matchedProject = boardConfig.LOCAL_PROJECTS.find(p => p.folder_path && p.folder_path.replace(/\\/g, '/').toLowerCase() === currentPath);
-					}
-					if(!matchedProject) {
-						matchedProject = boardConfig.LOCAL_PROJECTS.find(p => p.folder_path && path.basename(p.folder_path).toLowerCase() === currentFolder);
+						matchedProject = boardConfig.LOCAL_PROJECTS.find(p => projectMatchesDir(p, process.cwd()));
 					}
 					if(!matchedProject && boardConfig.LOCAL_PROJECTS.length > 0) {
 						matchedProject = boardConfig.LOCAL_PROJECTS[0];
@@ -52,18 +48,12 @@ if(fs.existsSync(projectsPath)) {
 		}
 		
 		if(!matchedKey) {
-			// Find by matching current folder inside LOCAL_PROJECTS
-			matchedKey=Object.keys(boards).find(k=>{
-				const boardConfig = boards[k];
-				if(boardConfig.LOCAL_PROJECTS && Array.isArray(boardConfig.LOCAL_PROJECTS)) {
-					matchedProject = boardConfig.LOCAL_PROJECTS.find(p => p.folder_path && p.folder_path.replace(/\\/g,'/').toLowerCase() === currentPath);
-					if(!matchedProject) {
-						matchedProject = boardConfig.LOCAL_PROJECTS.find(p => p.folder_path && path.basename(p.folder_path).toLowerCase() === currentFolder);
-					}
-					return !!matchedProject;
-				}
-				return false;
-			});
+			// Find by matching current folder inside LOCAL_PROJECTS (expanded path first, basename fallback)
+			const found = findProject(projects, {cwd: process.cwd()});
+			if(found) {
+				matchedKey = found.boardUrl;
+				matchedProject = found.project;
+			}
 		}
 
 		if(matchedKey) {
@@ -199,23 +189,8 @@ function getEmlContent(cardId,attachmentId,fileName) {
 
 // Core functions
 function getRobustBillingPath(logFilename) {
-	if(!logFilename) logFilename = 'billing-log.md';
-	let billingLogPath;
-	if(path.isAbsolute(logFilename)) {
-		billingLogPath = logFilename;
-		if(!fs.existsSync(billingLogPath)) {
-			const fallbackPath = path.join(__dirname,'..','billing',path.basename(logFilename));
-			if(fs.existsSync(fallbackPath)) {
-				billingLogPath = fallbackPath;
-			}
-		}
-	} else {
-		billingLogPath = path.join(process.cwd(),'.agents','billing',logFilename);
-		if(!fs.existsSync(billingLogPath)) {
-			billingLogPath = path.join(__dirname,'..','billing',logFilename);
-		}
-	}
-	return billingLogPath;
+	// Returns null for disabled billing ('-'); see paths.js for the resolution order
+	return resolveBillingPath(logFilename, process.cwd());
 }
 
 function printContext() {
@@ -229,8 +204,12 @@ function printContext() {
 	}
 	console.log(`\x1b[36mBoard URL:\x1b[0m  ${BOARD_URL}`);
 	const billingLogPath = getRobustBillingPath(config.BILLING_LOG_FILE);
-	const hasLog = fs.existsSync(billingLogPath);
-	console.log(`\x1b[36mLog File:\x1b[0m   ${billingLogPath} (${hasLog?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
+	if(billingLogPath) {
+		const hasLog = fs.existsSync(billingLogPath);
+		console.log(`\x1b[36mLog File:\x1b[0m   ${toAgentsRelative(billingLogPath)} (${hasLog?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
+	} else {
+		console.log('\x1b[36mLog File:\x1b[0m   \x1b[33mDisabled\x1b[0m');
+	}
 	console.log('\x1b[35m==================================================\x1b[0m\n');
 }
 
@@ -411,6 +390,7 @@ async function startCard(cardShortLink) {
 		console.log('\x1b[32mactive_ticket.json successfully created in the workspace!\x1b[0m');
 	} catch(error) {
 		console.error(error);
+		process.exitCode = 1;
 	}
 }
 
@@ -1023,8 +1003,8 @@ async function completeSession(cardShortLink,manualTimeEstimate='') {
 		
 		// 2. Read billing log (try local project folder first, fallback to script directory)
 		const billingLogPath = getRobustBillingPath(config.BILLING_LOG_FILE);
-		
-		if(!fs.existsSync(billingLogPath)) {
+
+		if(!billingLogPath||!fs.existsSync(billingLogPath)) {
 			console.log('Notice: billing log file does not exist, skipping automatic log entry.');
 			return;
 		}
@@ -1037,8 +1017,10 @@ async function completeSession(cardShortLink,manualTimeEstimate='') {
 		let startTimeStr='';
 		let dateStr='';
 		
+		// Accept the English template from AGENTS.md (*Active* / In Progress) and the German legacy markers
+		const activeMarker=/\*(Active|Aktiv)\*|\bIn (Progress|Arbeit)\b/;
 		for(let i=0;i<lines.length;i++) {
-			if(lines[i].includes('*Aktiv*')||lines[i].includes('In Arbeit')) {
+			if(lines[i].trim().startsWith('|')&&activeMarker.test(lines[i])) {
 				activeLineIndex=i;
 				const cols=lines[i].split('|').map(c=>c.trim());
 				if(cols.length>=7) {
@@ -1117,6 +1099,7 @@ async function completeSession(cardShortLink,manualTimeEstimate='') {
         console.log('\x1b[32mSession successfully completed and documented in the billing log!\x1b[0m');
     } catch (error) {
         console.error(error);
+        process.exitCode = 1;
     }
 }
 
@@ -1286,11 +1269,12 @@ function showProjects() {
 			console.log('  (No local projects registered)');
 		} else {
 			for(const p of localProjects) {
-				const folderExists=fs.existsSync(p.folder_path);
+				const resolvedFolder=expandPath(p.folder_path);
+				const folderExists=!!resolvedFolder&&fs.existsSync(resolvedFolder);
 				let symlinkStatus = '\x1b[31mMissing .agents Symlink\x1b[0m';
 				if(folderExists) {
-					const symlinkPath=path.join(p.folder_path,'.agents');
-					const normalizedPath = p.folder_path.replace(/\\/g, '/').toLowerCase();
+					const symlinkPath=path.join(resolvedFolder,'.agents');
+					const normalizedPath = resolvedFolder.replace(/\\/g, '/').toLowerCase();
 					if (normalizedPath.includes('/.agents/') || normalizedPath.endsWith('/.agents')) {
 						symlinkStatus='\x1b[32mNot Required (Inside .agents)\x1b[0m';
 					} else if(fs.existsSync(symlinkPath)) {
@@ -1313,7 +1297,7 @@ function showProjects() {
 					console.log(`    Log:     \x1b[33mDisabled\x1b[0m`);
 				} else {
 					const robustBillingPath = getRobustBillingPath(p.billing_path);
-					console.log(`    Log:     ${robustBillingPath} (${fs.existsSync(robustBillingPath)?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
+					console.log(`    Log:     ${toAgentsRelative(robustBillingPath)} (${fs.existsSync(robustBillingPath)?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
 				}
 				console.log(`    Status:  ${symlinkStatus}`);
 			}
