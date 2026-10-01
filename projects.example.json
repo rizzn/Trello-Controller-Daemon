@@ -1,8 +1,7 @@
 {
 	"PATH_VARS":{
 		"*":{
-			"HTDOCS":"%AGENTS_ROOT%/../htdocs",
-			"BILLING_PATH":"%AGENTS_ROOT%/billing"
+			"HTDOCS":"%AGENTS_ROOT%/../htdocs"
 		},
 		"YOUR-HOSTNAME":{
 			"HTDOCS":"C:/xampp/htdocs",
@@ -20,8 +19,7 @@
 			"LOCAL_PROJECTS":[
 				{
 					"name":"Project-A",
-					"folder_path":"%HTDOCS%/project-a",
-					"billing_path":"%BILLING_PATH%/billing-log-project-a.md"
+					"folder_path":"%HTDOCS%/project-a"
 				}
 			],
 			"LAST_CHECKED":null
@@ -34,8 +32,7 @@
 			"LOCAL_PROJECTS":[
 				{
 					"name":"Project-B",
-					"folder_path":"%AGENTS_ROOT%/project-b",
-					"billing_path":"%BILLING_PATH%/billing-log-project-b.md"
+					"folder_path":"%AGENTS_ROOT%/project-b"
 				}
 			],
 			"LAST_CHECKED":null
@@ -48,8 +45,7 @@
 			"LOCAL_PROJECTS":[
 				{
 					"name":"Board-Only",
-					"folder_path":"-",
-					"billing_path":"-"
+					"folder_path":"-"
 				}
 			],
 			"LAST_CHECKED":null

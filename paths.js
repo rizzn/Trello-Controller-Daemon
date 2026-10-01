@@ -133,25 +133,7 @@ function resolveWorkspaceRoot(project, cwd = process.cwd(), env = defaultScope()
 	return null;
 }
 
-/* BILLING LOG: RELATIVE NAMES RESOLVE INTO .agents/billing/, ABSOLUTE ONES FALL BACK TO THEIR BASENAME THERE */
-function resolveBillingPath(raw, cwd = process.cwd(), env = defaultScope()) {
-	if(raw === '-') {
-		return null;
-	}
-	const name = raw || 'billing-log.md';
-	const expanded = expandPath(name, env);
-	if(expanded && path.isAbsolute(expanded) && fs.existsSync(expanded)) {
-		return expanded;
-	}
-	const base = path.basename((expanded || name).replace(/\\/g, '/'));
-	const local = path.join(cwd, '.agents', 'billing', base);
-	if(fs.existsSync(local)) {
-		return local;
-	}
-	return path.join(AGENTS_ROOT, 'billing', base);
-}
-
-/* PATH RELATIVE TO THE .agents ROOT FOR LOGS AND REPORTS, E.G. '.agents/billing/billing-log-pec.md' */
+/* PATH RELATIVE TO THE .agents ROOT FOR LOGS AND REPORTS, E.G. '.agents/skills/billing-manager/output/billing-pec.md' */
 function toAgentsRelative(p) {
 	if(!p) {
 		return '';
@@ -160,7 +142,7 @@ function toAgentsRelative(p) {
 	if(!rel.startsWith('..') && !path.isAbsolute(rel)) {
 		return `.agents/${rel}`;
 	}
-	// Reached through a project's .agents symlink (e.g. <project>/.agents/billing/x.md)
+	// Reached through a project's .agents link (e.g. <project>/.agents/skills/x.md)
 	const norm = p.replace(/\\/g, '/');
 	const idx = norm.lastIndexOf('/.agents/');
 	return idx !== -1 ? norm.slice(idx + 1) : path.basename(p);
@@ -175,6 +157,5 @@ module.exports = {
 	projectMatchesDir,
 	findProject,
 	resolveWorkspaceRoot,
-	resolveBillingPath,
 	toAgentsRelative
 };

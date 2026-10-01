@@ -2,7 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const {execSync} = require('child_process');
-const {expandPath, findProject, projectMatchesDir, resolveBillingPath, toAgentsRelative} = require('./paths.js');
+const {AGENTS_ROOT, expandPath, findProject, projectMatchesDir} = require('./paths.js');
+// Session timing rules live in the billing-manager skill; the controller only reuses the estimate rule for its card comment
+const billing = require(path.join(AGENTS_ROOT, 'skills', 'billing-manager', 'scripts', 'billing.js'));
 
 // 1. Load configuration from the central projects.json
 const projectsPath=path.join(__dirname,'projects.json');
@@ -62,7 +64,6 @@ if(fs.existsSync(projectsPath)) {
 				config.TRELLO_BOARD_URL = matchedKey;
 			}
 			if(matchedProject) {
-				config.BILLING_LOG_FILE = matchedProject.billing_path;
 				config.PROJECT_NAME = matchedProject.name;
 			}
 		}
@@ -188,11 +189,6 @@ function getEmlContent(cardId,attachmentId,fileName) {
 }
 
 // Core functions
-function getRobustBillingPath(logFilename) {
-	// Returns null for disabled billing ('-'); see paths.js for the resolution order
-	return resolveBillingPath(logFilename, process.cwd());
-}
-
 function printContext() {
 	console.log('\x1b[35m==================================================\x1b[0m');
 	console.log('\x1b[35m⚡ TRELLO CONTROLLER - ACTIVE CONTEXT ⚡\x1b[0m');
@@ -203,13 +199,6 @@ function printContext() {
 		console.log('\x1b[36mProject:\x1b[0m    Unregistered Workspace');
 	}
 	console.log(`\x1b[36mBoard URL:\x1b[0m  ${BOARD_URL}`);
-	const billingLogPath = getRobustBillingPath(config.BILLING_LOG_FILE);
-	if(billingLogPath) {
-		const hasLog = fs.existsSync(billingLogPath);
-		console.log(`\x1b[36mLog File:\x1b[0m   ${toAgentsRelative(billingLogPath)} (${hasLog?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
-	} else {
-		console.log('\x1b[36mLog File:\x1b[0m   \x1b[33mDisabled\x1b[0m');
-	}
 	console.log('\x1b[35m==================================================\x1b[0m\n');
 }
 
@@ -382,7 +371,8 @@ async function startCard(cardShortLink) {
 					state:item.state
 				})):[]
 			})),
-			startedAt:timestamp
+			startedAt:timestamp,
+			startedAtIso:new Date().toISOString()
 		};
 		
 		const jsonStr=JSON.stringify(activeTicket,null,'\t').replace(/": /g,'":');
@@ -631,10 +621,8 @@ async function backupBoard() {
 			}
 		}
 		
-		let backupFilePath=path.join(process.cwd(),'.agents','board_backup.txt');
-		if(!fs.existsSync(path.dirname(backupFilePath))) {
-			backupFilePath=path.join(__dirname,'board_backup.txt');
-		}
+		// Next to the controller, independent of any project link
+		const backupFilePath=path.join(__dirname,'board_backup.txt');
 		
 		fs.writeFileSync(backupFilePath,output,'utf8');
 		console.log(`\x1b[32mBackup successfully saved to ${backupFilePath}!\x1b[0m`);
@@ -1010,21 +998,48 @@ async function listenInbox(intervalMinutes=0.1667) {
 	},intervalMinutes*60000);
 }
 
-async function completeSession(cardShortLink,manualTimeEstimate='') {
+/* SESSION START FROM active_ticket.json: startedAtIso, ELSE THE de-DE STRING "1.10.2026, 14:05:00" OF OLDER TICKETS */
+function ticketStartTime(ticket) {
+	if(ticket.startedAtIso) {
+		const iso = new Date(ticket.startedAtIso);
+		return isNaN(iso) ? null : iso;
+	}
+	const m = String(ticket.startedAt || '').match(/(\d{1,2})\.(\d{1,2})\.(\d{4}),?\s+(\d{1,2}):(\d{2})/);
+	return m ? new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5]) : null;
+}
+
+/* DURATION TEXTS FOR THE TRELLO COMMENT (UNCHANGED WORDING: "14 Min." / "1 Std. 50 Min.") */
+function commentDuration(minutes) {
+	if(minutes >= 60) {
+		return `${Math.floor(minutes / 60)} Std. ${minutes % 60 ? (minutes % 60) + ' Min.' : ''}`.trim();
+	}
+	return `${minutes} Min.`;
+}
+
+async function completeSession(cardShortLink, manualTimeEstimate = '') {
 	try {
 		// 1. Fetch and move the Trello card
-		const card=await apiRequest('GET',`/cards/${cardShortLink}`);
-		const lists=await apiRequest('GET',`/boards/${boardId}/lists`);
-		const targetList=lists.find(l=>l.name.toLowerCase().includes(COMPLETED_LIST_NAME.toLowerCase()))||
-		                 lists.find(l=>l.name.toLowerCase().includes('implemented')||l.name.toLowerCase().includes('done')||l.name.toLowerCase().includes('completed')||l.name.toLowerCase().includes('complete'));
+		const card = await apiRequest('GET', `/cards/${cardShortLink}`);
+		const lists = await apiRequest('GET', `/boards/${boardId}/lists`);
+		const targetList = lists.find(l => l.name.toLowerCase().includes(COMPLETED_LIST_NAME.toLowerCase())) ||
+		                   lists.find(l => l.name.toLowerCase().includes('implemented') || l.name.toLowerCase().includes('done') || l.name.toLowerCase().includes('completed') || l.name.toLowerCase().includes('complete'));
 		if(!targetList) throw `No matching list ("${COMPLETED_LIST_NAME}", "Implemented", "Completed", or "Done") found!`;
-		
+
 		console.log(`Moving card [${cardShortLink}] "${card.name}" to list "${targetList.name}"...`);
-		await apiRequest('PUT',`/cards/${card.id}?idList=${targetList.id}&pos=top`);
-		
-		// Delete local active_ticket.json if present
-		const activeTicketPath=path.join(process.cwd(),'active_ticket.json');
+		await apiRequest('PUT', `/cards/${card.id}?idList=${targetList.id}&pos=top`);
+
+		// 2. Read the session start of this card, then delete the local active_ticket.json
+		const activeTicketPath = path.join(process.cwd(), 'active_ticket.json');
+		let startedAt = null;
 		if(fs.existsSync(activeTicketPath)) {
+			try {
+				const ticket = JSON.parse(fs.readFileSync(activeTicketPath, 'utf8'));
+				if(ticket.shortLink === card.shortLink) {
+					startedAt = ticketStartTime(ticket);
+				}
+			} catch(e) {
+				// Unreadable ticket: complete without durations
+			}
 			try {
 				fs.unlinkSync(activeTicketPath);
 				console.log('Local active_ticket.json deleted.');
@@ -1032,107 +1047,32 @@ async function completeSession(cardShortLink,manualTimeEstimate='') {
 				// Ignore
 			}
 		}
-		
-		// 2. Read billing log (try local project folder first, fallback to script directory)
-		const billingLogPath = getRobustBillingPath(config.BILLING_LOG_FILE);
 
-		if(!billingLogPath||!fs.existsSync(billingLogPath)) {
-			console.log('Notice: billing log file does not exist, skipping automatic log entry.');
+		// 3. Completion comment with durations, only for a session started with "start" (billing lives in skills/billing-manager)
+		if(!startedAt) {
+			console.log('No started session for this card: card moved, no duration comment.');
 			return;
 		}
-		
-		let content=fs.readFileSync(billingLogPath,'utf8');
-		
-		// Find the active session line in the logbook
-		const lines=content.split(/\r?\n/);
-		let activeLineIndex=-1;
-		let startTimeStr='';
-		let dateStr='';
-		
-		// Accept the English template from AGENTS.md (*Active* / In Progress) and the German legacy markers
-		const activeMarker=/\*(Active|Aktiv)\*|\bIn (Progress|Arbeit)\b/;
-		for(let i=0;i<lines.length;i++) {
-			if(lines[i].trim().startsWith('|')&&activeMarker.test(lines[i])) {
-				activeLineIndex=i;
-				const cols=lines[i].split('|').map(c=>c.trim());
-				if(cols.length>=7) {
-					dateStr=cols[1];
-					startTimeStr=cols[2];
-				}
-				break;
-			}
-		}
-		
-		if(activeLineIndex===-1) {
-			console.log('No active session found in the logbook. Card moved, log untouched.');
-			return;
-		}
-		
-		// 3. Calculate session duration
-		const now=new Date();
-		const pad=n=>String(n).padStart(2,'0');
-		const endTimeStr=`${pad(now.getHours())}:${pad(now.getMinutes())}`;
-		
-		const [startH,startM]=startTimeStr.split(':').map(Number);
-		const start=new Date(now);
-		start.setHours(startH,startM,0,0);
-		let diffMs=now-start;
-		if(diffMs<0) diffMs+=24*60*60*1000;
-		const durationMin=Math.round(diffMs/60000);
-		
-		let estHours=Math.ceil((durationMin*7.5)/10)*10;
-		if(estHours<30) estHours=45;
-		const actualTimeText=`${durationMin} Min.`;
-		
-		let estTimeText=manualTimeEstimate;
-		if(!estTimeText) {
-			if(estHours>=60) {
-				estTimeText=`${Math.floor(estHours/60)} Std. ${estHours%60?(estHours%60)+' Min.':''}`;
-			} else {
-				estTimeText=`${estHours} Min.`;
-			}
-		}
-		
-		// Update the session line in the logbook
-		lines[activeLineIndex]=`| ${dateStr} | ${startTimeStr} | ${endTimeStr} | ${actualTimeText} | ${estTimeText} | Erledigt (${card.name}) |`;
-		
-		// 4. Post completion comment on Trello
-		const nowFormatted=now.toLocaleString('de-DE');
-		const completionComment=MSG_PROCESSING_COMPLETED
-			.replace('{timestamp}',nowFormatted)
-			.replace('{actual_duration}',actualTimeText)
-			.replace('{estimated_duration}',estTimeText)
-			.replace('{duration}',estTimeText);
+		const now = new Date();
+		const durationMin = Math.max(0, Math.round((now - startedAt) / 60000));
+		const actualTimeText = commentDuration(durationMin);
+		const estTimeText = manualTimeEstimate || commentDuration(billing.defaultEstimate(durationMin));
+		const completionComment = MSG_PROCESSING_COMPLETED
+			.replace('{timestamp}', now.toLocaleString('de-DE'))
+			.replace('{actual_duration}', actualTimeText)
+			.replace('{estimated_duration}', estTimeText)
+			.replace('{duration}', estTimeText);
 		console.log(`Adding Trello comment: "${completionComment}"`);
 		try {
-			await apiRequest('POST',`/cards/${card.id}/actions/comments`,{text:completionComment});
+			await apiRequest('POST', `/cards/${card.id}/actions/comments`, {text: completionComment});
 		} catch(commentErr) {
-			console.error('Error posting completion comment:',commentErr.message||commentErr);
+			console.error('Error posting completion comment:', commentErr.message || commentErr);
 		}
-        
-        // 5. Generate billing item entry
-        const billingItem = `
-### [${dateStr}] Session: ${card.name}
-*   **Tatsächliche Entwicklungszeit mit KI & Review:** ${actualTimeText} (${startTimeStr} - ${endTimeStr} Uhr)
-*   **Geschätzte manuelle Entwicklungszeit ohne KI:** ca. ${estTimeText}
-
-#### Rechnungsposition:
-*   **Titel:** ${card.name}
-*   **Details:**
-    *   ${card.desc || 'Implementierung und Verifizierung des Features gemäß Spezifikation.'}
-*   **Nutzen für den Kunden:** Effiziente Bereitstellung des Features mit modernsten Webtechnologien und minimalen Ladezeiten.
-
----`;
-        
-        let newContent = lines.join('\n');
-        newContent = newContent.trim() + '\n\n' + billingItem.trim() + '\n';
-        
-        fs.writeFileSync(billingLogPath, newContent, 'utf8');
-        console.log('\x1b[32mSession successfully completed and documented in the billing log!\x1b[0m');
-    } catch (error) {
-        console.error(error);
-        process.exitCode = 1;
-    }
+		console.log('\x1b[32mCard completed. Close the billing session with skills/billing-manager (billing.js close).\x1b[0m');
+	} catch(error) {
+		console.error(error);
+		process.exitCode = 1;
+	}
 }
 
 async function showNewTickets() {
@@ -1291,7 +1231,9 @@ function showProjects() {
 	
 	const projects=JSON.parse(fs.readFileSync(projectsPath,'utf8'));
 	const boards=projects.TRELLO_BOARDS||{};
-	
+	const profileLink = path.join(require('os').homedir(), '.agents-global');
+	console.log(`\x1b[36mProfile link:\x1b[0m ~/.agents-global ${fs.existsSync(profileLink) ? '\x1b[32mOK\x1b[0m' : '\x1b[31mmissing (run tools/setup/machine-check.ps1)\x1b[0m'}`);
+
 	for(const boardUrl of Object.keys(boards)) {
 		console.log(`\n\x1b[36mBoard: ${boardUrl}\x1b[0m`);
 		const boardConfig=boards[boardUrl];
@@ -1303,35 +1245,14 @@ function showProjects() {
 			for(const p of localProjects) {
 				const resolvedFolder=expandPath(p.folder_path);
 				const folderExists=!!resolvedFolder&&fs.existsSync(resolvedFolder);
-				let symlinkStatus = '\x1b[31mMissing .agents Symlink\x1b[0m';
-				if(folderExists) {
-					const symlinkPath=path.join(resolvedFolder,'.agents');
-					const normalizedPath = resolvedFolder.replace(/\\/g, '/').toLowerCase();
-					if (normalizedPath.includes('/.agents/') || normalizedPath.endsWith('/.agents')) {
-						symlinkStatus='\x1b[32mNot Required (Inside .agents)\x1b[0m';
-					} else if(fs.existsSync(symlinkPath)) {
-						try {
-							const stats=fs.lstatSync(symlinkPath);
-							if(stats.isSymbolicLink()) {
-								symlinkStatus='\x1b[32mSymlink OK\x1b[0m';
-							} else {
-								symlinkStatus='\x1b[33mFolder (Not Symlink)\x1b[0m';
-							}
-						} catch(e) {
-							symlinkStatus='\x1b[32mSymlink OK\x1b[0m';
-						}
-					}
-				}
-				
+				// Projects need no .agents link any more (profile link ~/.agents-global); an old one is only reported
+				const legacyLink = folderExists && fs.existsSync(path.join(resolvedFolder, '.agents'));
+
 				console.log(`  - \x1b[1m${p.name}\x1b[0m`);
 				console.log(`    Path:    ${p.folder_path} (${folderExists?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
-				if (p.billing_path === '-') {
-					console.log(`    Log:     \x1b[33mDisabled\x1b[0m`);
-				} else {
-					const robustBillingPath = getRobustBillingPath(p.billing_path);
-					console.log(`    Log:     ${toAgentsRelative(robustBillingPath)} (${fs.existsSync(robustBillingPath)?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
+				if(legacyLink) {
+					console.log('    Link:    \x1b[33mlegacy .agents link (not needed, remove with cmd /c rmdir)\x1b[0m');
 				}
-				console.log(`    Status:  ${symlinkStatus}`);
 			}
 		}
 	}

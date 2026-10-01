@@ -13,7 +13,7 @@
 
 # Trello Controller Daemon
 
-A lightweight, configuration-driven command-line interface (CLI) and background daemon runner for managing and automating multiple Trello boards, featuring built-in session tracking and billing logging.
+A lightweight, configuration-driven command-line interface (CLI) and background daemon runner for managing and automating multiple Trello boards, featuring built-in session tracking. Billing logs are not part of this tool — they live in the [`billing-manager`](../../skills/billing-manager/SKILL.md) skill.
 
 Built completely in native Node.js without heavy external dependencies.
 
@@ -27,7 +27,7 @@ Built completely in native Node.js without heavy external dependencies.
 - [Configuration](#configuration)
   - [Board List Requirements](#board-list-requirements)
 - [Usage & Commands](#usage--commands)
-- [Session Tracking & Billing Workflow](#session-tracking--billing-workflow)
+- [Session Tracking Workflow](#session-tracking-workflow)
   - [Step 1: Start a Session](#step-1-start-a-session)
   - [Step 2: Complete the Session](#step-2-complete-the-session)
   - [Working on Multiple Tickets in One Session](#working-on-multiple-tickets-in-one-session)
@@ -39,9 +39,9 @@ Built completely in native Node.js without heavy external dependencies.
 - **CLI Card Management:** List, search, add, move, comment, label, archive, and delete Trello cards instantly from the terminal.
 - **Board Synchronization (`sync`):** Dynamically updates and syncs label configurations (colors, names) defined in `controller.json` with the Trello board.
 - **Automated Label Parsing:** Parses custom ticket prefixes (like `[BUG]`, `[FEATURE]`) in card titles, cleans card titles on Trello, and automatically applies corresponding color-coded labels.
-- **Session Tracking & Billing Logs (`complete` / `check-done`):**
-  - Track session durations.
-  - Automatically log completed tickets and checklists into a localized Markdown billing file (`billing-log.md`) with a user-friendly title, consumer details, and time-saving metrics.
+- **Session Tracking (`start` / `complete` / `check-done`):**
+  - Track session durations via `active_ticket.json` and post actual and estimated time as a card comment.
+  - Billing rows and client billing items are written by the [`billing-manager`](../../skills/billing-manager/SKILL.md) skill, not by this tool.
 - **Project-Agnostic Registry (`projects.json`):** Manage multiple local projects and their Trello credentials from a single, centralized configuration.
 - **Background Daemon Polling (`listen` / Runner):** Set up a background cron/task to periodically poll inbox lists and parse cards silently.
 - **Automatic Ticket Merging (E-Mail Threading):** Automatically merges email replies/updates (e.g. `Re:`, `Aw:`) sent to the board's email address into existing cards as comments by matching normalized titles, copying description texts, and transferring files/attachments.
@@ -50,20 +50,20 @@ Built completely in native Node.js without heavy external dependencies.
 
 ## Installation & Folder Structure
 
-To use the Trello Controller across multiple projects efficiently, it is recommended to place this folder globally under a central directory (e.g., `C:\global\.agents\trello`) and link it to each project workspace:
+To use the Trello Controller across multiple projects efficiently, place this folder globally under a central directory and reach it through one link in the user profile — projects need no link of their own:
 
 ### 1. Global Folder Setup
 Place the cloned files inside a central directory of your choice, for example:
 `C:\global\.agents\tools\trello\`
 
-### 2. Local Project Symlink
-In each of your project directories, create a symbolic link named `.agents` that points to the global agents directory. On Windows (PowerShell):
+### 2. Profile Link (once per machine)
+Create a directory junction `~/.agents-global` that points to the global agents directory. On Windows (PowerShell, no admin rights needed):
 ```powershell
-New-Item -ItemType SymbolicLink -Path ".\.agents" -Target "C:\global\.agents"
+New-Item -ItemType Junction -Path "$HOME\.agents-global" -Target "C:\global\.agents"
 ```
 
-Once linked, any local shell or AI Assistant can access and execute the controller using a uniform, relative path:
-`node .agents/tools/trello/controller.js [command]`
+Run the controller from inside the project folder (the working directory selects the project):
+`node $HOME/.agents-global/tools/trello/controller.js [command]`
 
 This ensures zero configuration overhead per workspace.
 
@@ -91,13 +91,11 @@ This ensures zero configuration overhead per workspace.
          "LOCAL_PROJECTS": [
            {
              "name": "Project A",
-             "folder_path": "C:/path/to/your/project-a",
-             "billing_path": "C:/path/to/billing-log-a.md"
+             "folder_path": "C:/path/to/your/project-a"
            },
            {
              "name": "Project B",
-             "folder_path": "C:/path/to/your/project-b",
-             "billing_path": "C:/path/to/billing-log-b.md"
+             "folder_path": "C:/path/to/your/project-b"
            }
          ],
          "LAST_CHECKED": ""
@@ -110,7 +108,6 @@ This ensures zero configuration overhead per workspace.
 > **Cross-Platform & Laptop Portability:**
 > To ensure seamless synchronization between different machines (e.g., Desktop and Laptop via Dropbox) where absolute paths might differ:
 > - **Folder Path Fallback:** If the current working directory path does not exactly match `folder_path` in `projects.json` (due to different drive letters or parent folders), the controller automatically falls back to matching the base directory name (e.g. `project-a`).
-> - **Billing Path Fallback:** If an absolute `billing_path` is specified but does not exist on the current machine (e.g., pointing to drive `E:` instead of `C:`), the controller automatically falls back to searching for the log file's filename inside the global `.agents/billing/` directory.
 
 2. Create a `controller.json` file containing your board label priorities, prefix mappings, and custom automated message templates:
    ```json
@@ -162,63 +159,54 @@ Navigate to any registered project directory in your terminal and execute `contr
 
 | Command | Usage | Description |
 | :--- | :--- | :--- |
-| `list` | `node .agents/tools/trello/controller.js list` | Show board lists and cards. |
-| `add` | `node .agents/tools/trello/controller.js add "Title" ["Desc"] ["ListName"]` | Create a new card with automatic label assignment. |
-| `desc` | `node .agents/tools/trello/controller.js desc [shortLink] "Description"` | Update a card's description. |
-| `move` | `node .agents/tools/trello/controller.js move [shortLink] "ListName"` | Move a card to another list. |
-| `start` | `node .agents/tools/trello/controller.js start [shortLink]` | Move a card to "Active Tickets", track start time, create local `active_ticket.json`. |
-| `complete` | `node .agents/tools/trello/controller.js complete [shortLink] "[estTime]"` | Move card to "Completed Tickets", calculate actual time, log billing session. |
-| `check` | `node .agents/tools/trello/controller.js check [shortLink] "ItemName"` | Add a checklist item to a card. |
-| `check-done` | `node .agents/tools/trello/controller.js check-done [shortLink] "ItemName"` | Mark a checklist item as completed and update local JSON. |
-| `label` | `node .agents/tools/trello/controller.js label [shortLink] [Color] ["LabelName"]` | Add a label to a card. |
-| `comment` | `node .agents/tools/trello/controller.js comment [shortLink] "Text"` | Add a comment to a card. |
-| `archive` | `node .agents/tools/trello/controller.js archive [shortLink]` | Archive a card. |
-| `delete` | `node .agents/tools/trello/controller.js delete [shortLink]` | Permanently delete a card. |
-| `search` | `node .agents/tools/trello/controller.js search "Query"` | Search for cards on the board. |
-| `inbox` | `node .agents/tools/trello/controller.js inbox` | Run manual incoming ticket & email merging logic. |
-| `sync` | `node .agents/tools/trello/controller.js sync` | Synchronize board labels & clean card title prefixes board-wide. |
-| `listen` | `node .agents/tools/trello/controller.js listen [intervalMinutes]` | Start the persistent inbox polling daemon in the foreground. |
-| `news` / `unread` | `node .agents/tools/trello/controller.js news [peek]` | Show new/unread tickets across all boards. Use `peek` to list without updating LAST_CHECKED. |
-| `status` | `node .agents/tools/trello/controller.js status` | Display the status of the background daemon process and scheduled task. |
-| `projects` | `node .agents/tools/trello/controller.js projects` | List registered projects, paths, and `.agents` symlink status. |
-| `backup` | `node .agents/tools/trello/controller.js backup` | Export the current board layout to `board_backup.txt`. |
-| `sort` | `node .agents/tools/trello/controller.js sort` | Sort cards in lists based on priorities. |
+| `list` | `node $HOME/.agents-global/tools/trello/controller.js list` | Show board lists and cards. |
+| `add` | `node $HOME/.agents-global/tools/trello/controller.js add "Title" ["Desc"] ["ListName"]` | Create a new card with automatic label assignment. |
+| `desc` | `node $HOME/.agents-global/tools/trello/controller.js desc [shortLink] "Description"` | Update a card's description. |
+| `move` | `node $HOME/.agents-global/tools/trello/controller.js move [shortLink] "ListName"` | Move a card to another list. |
+| `start` | `node $HOME/.agents-global/tools/trello/controller.js start [shortLink]` | Move a card to "Active Tickets", track start time, create local `active_ticket.json`. |
+| `complete` | `node $HOME/.agents-global/tools/trello/controller.js complete [shortLink] "[estTime]"` | Move card to "Completed Tickets", post actual/estimated time as a comment. |
+| `check` | `node $HOME/.agents-global/tools/trello/controller.js check [shortLink] "ItemName"` | Add a checklist item to a card. |
+| `check-done` | `node $HOME/.agents-global/tools/trello/controller.js check-done [shortLink] "ItemName"` | Mark a checklist item as completed and update local JSON. |
+| `label` | `node $HOME/.agents-global/tools/trello/controller.js label [shortLink] [Color] ["LabelName"]` | Add a label to a card. |
+| `comment` | `node $HOME/.agents-global/tools/trello/controller.js comment [shortLink] "Text"` | Add a comment to a card. |
+| `archive` | `node $HOME/.agents-global/tools/trello/controller.js archive [shortLink]` | Archive a card. |
+| `delete` | `node $HOME/.agents-global/tools/trello/controller.js delete [shortLink]` | Permanently delete a card. |
+| `search` | `node $HOME/.agents-global/tools/trello/controller.js search "Query"` | Search for cards on the board. |
+| `inbox` | `node $HOME/.agents-global/tools/trello/controller.js inbox` | Run manual incoming ticket & email merging logic. |
+| `sync` | `node $HOME/.agents-global/tools/trello/controller.js sync` | Synchronize board labels & clean card title prefixes board-wide. |
+| `listen` | `node $HOME/.agents-global/tools/trello/controller.js listen [intervalMinutes]` | Start the persistent inbox polling daemon in the foreground. |
+| `news` / `unread` | `node $HOME/.agents-global/tools/trello/controller.js news [peek]` | Show new/unread tickets across all boards. Use `peek` to list without updating LAST_CHECKED. |
+| `status` | `node $HOME/.agents-global/tools/trello/controller.js status` | Display the status of the background daemon process and scheduled task. |
+| `projects` | `node $HOME/.agents-global/tools/trello/controller.js projects` | List registered projects and paths, the `~/.agents-global` profile link, and legacy project `.agents` links. |
+| `backup` | `node $HOME/.agents-global/tools/trello/controller.js backup` | Export the current board layout to `board_backup.txt`. |
+| `sort` | `node $HOME/.agents-global/tools/trello/controller.js sort` | Sort cards in lists based on priorities. |
 
 ### CLI Examples:
 
 ```bash
 # List all cards grouped by list
-node .agents/tools/trello/controller.js list
+node $HOME/.agents-global/tools/trello/controller.js list
 
 # Synchronize labels and clean prefixes board-wide
-node .agents/tools/trello/controller.js sync
+node $HOME/.agents-global/tools/trello/controller.js sync
 
 # Add a card to the "Release v1.0" list with automatic labeling
-node .agents/tools/trello/controller.js add "Release v1.0" "[BUG] Button is not working on mobile"
+node $HOME/.agents-global/tools/trello/controller.js add "Release v1.0" "[BUG] Button is not working on mobile"
 
 # Move a card to a different list
-node .agents/tools/trello/controller.js move "shortLink" "Active Tickets"
+node $HOME/.agents-global/tools/trello/controller.js move "shortLink" "Active Tickets"
 
 # Show new/unread incoming tickets across all registered boards
-node .agents/tools/trello/controller.js news
+node $HOME/.agents-global/tools/trello/controller.js news
 ```
 
 
-### Session Tracking & Billing Workflow
+### Session Tracking Workflow
 
-This tool includes an automated session calculator and billing logger that operates on a markdown logbook file (defined via `billing_path` inside the project's config block).
-
-> [!TIP]
-> **No Manual Effort Required!** You do not need to perform these tracking steps manually. If you are using an AI Coding Assistant/Agent (such as Gemini, Antigravity, Cline, Roo-Code, etc.), the agent can completely automate this Session Tracking and Billing Process for you. Just ask your agent to start working on a ticket, and it will handle all the steps below.
+The controller tracks the session on the card; the billing log (session row, client billing item) is handled separately by the [`billing-manager`](../../skills/billing-manager/SKILL.md) skill, the same way with or without Trello.
 
 #### Step 1: Start a Session
-Before starting your work, add an active session row to the session table in your markdown billing log:
-```markdown
-| Date | Start | End | Actual | Estimated | Description |
-|---|---|---|---|---|---|
-| 05/23/2026 | 14:15 | *Active* | | | In Progress (Ticket Name) |
-```
-Then, tell the controller to start the card (moves it to "Active Tickets" and posts a start comment):
+Start the card (moves it to "Active Tickets", posts a start comment and writes `active_ticket.json` with the start time):
 ```bash
 node /path/to/trello-controller-daemon/controller.js start "shortLink"
 ```
@@ -230,38 +218,30 @@ node /path/to/trello-controller-daemon/controller.js complete "shortLink" "1h 30
 ```
 The controller will automatically:
 1. Move the card to the **"Completed Tickets"** list (or the list configured in `TRELLO_LIST_COMPLETED`).
-2. Locate the active session row (`*Active*` or `In Progress`) in the logbook.
-3. Calculate the actual elapsed time and update the session row with the end time, actual duration, and estimate.
-4. Generate a consumer-ready billing item block and append it to the logbook.
+2. Calculate the elapsed time from `active_ticket.json` and post actual and estimated duration as a card comment.
+3. Delete `active_ticket.json`.
 
 #### Working on Multiple Tickets in One Session
-If your session covers multiple tickets:
-1. List all tickets in the active session row description:
-   `| 05/23/2026 | 14:15 | *Active* | | | In Progress (Ticket A & Ticket B) |`
-2. Start both cards on Trello using their respective shortLinks.
-3. When completing:
-   - Run `complete` on the **first ticket** first. This closes the active session in the logbook and generates the billing block.
-   - Run `complete` on the **remaining tickets**. Since there is no longer an active session in the log, the controller will move them to "Completed Tickets" on Trello without creating duplicate log entries or messing up the logbook.
+Start every card with `start` and complete every card with `complete`. The duration comment goes to the card stored in `active_ticket.json`; the other cards are only moved.
 
 ### AI Agent & IDE Environment Integration
 
 This tool is designed to seamlessly integrate with modern **AI Coding Environments** and IDE Agents (such as Gemini, Antigravity, Cline, Cursor, Roo-Code, or GitHub Copilot). It bridges the gap between task management (Trello) and code execution, allowing the AI agent to operate the system **fully autonomously**.
 
 #### How the Agent Handles the Controller:
-1. **Task Ingestion:** When the agent starts, it runs `node .agents/tools/trello/controller.js list` or reads the board configuration to find the next ticket.
+1. **Task Ingestion:** When the agent starts, it runs `node $HOME/.agents-global/tools/trello/controller.js list` or reads the board configuration to find the next ticket.
 2. **Autonomous Activation:** The agent executes the `start [shortLink]` command, which:
    - Moves the card to "Active Tickets" on Trello.
    - Automatically writes a clean, detailed task context file named `active_ticket.json` to the workspace root.
-   - Adds an active time-tracking entry into the project's local billing log.
 3. **Specification Parsing:** The agent reads `active_ticket.json` to get the full Trello card title, description, checklist items, and labels. The agent now has all the context it needs to write, debug, and test code for that ticket without human intervention.
-4. **Interactive Checklists:** As the agent implements features, it checks off checklist items on Trello in real-time using `node .agents/tools/trello/controller.js check-done [shortLink] "[itemName]"` to report progress.
+4. **Interactive Checklists:** As the agent implements features, it checks off checklist items on Trello in real-time using `node $HOME/.agents-global/tools/trello/controller.js check-done [shortLink] "[itemName]"` to report progress.
 5. **Auto-Completion & Time Tracking:** Once the task is complete, the agent runs the `complete [shortLink] "[estTime]"` command. This:
    - Moves the card to the completed list.
-   - Calculates the exact time elapsed during the session.
+   - Calculates the exact time elapsed during the session and posts it as a comment.
    - Deletes `active_ticket.json`.
-   - Generates and appends a consumer-ready billing line item to the project's markdown billing log.
+6. **Billing:** If billing is active for the workspace, the agent closes the session row and appends the billing item with the [`billing-manager`](../../skills/billing-manager/SKILL.md) skill.
 
-This allows the agent to handle the entire lifecycle of a ticket fully automated, from start to completion and billing, with zero human overhead. The user simply delegates the ticket to the agent; the agent initiates the session, updates the checklist, calculates the time, and logs the billing item automatically without requiring manual user intervention.
+This allows the agent to handle the entire lifecycle of a ticket, from start to completion, with zero human overhead.
 
 #### Recommended `.gitignore`:
 To prevent tracking temporary workspace ticket context in your git commits, add `active_ticket.json` to your project's local `.gitignore` file:
