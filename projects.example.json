@@ -1,13 +1,13 @@
 {
 	"PATH_VARS":{
 		"*":{
-			"HTDOCS":"%AGENTS_ROOT%/../htdocs"
+			"HTDOCS":"~/htdocs"
 		},
 		"YOUR-HOSTNAME":{
-			"HTDOCS":"C:/xampp/htdocs",
-			"AGENTS_ROOT":"C:/path/to/.agents"
+			"HTDOCS":"C:/xampp/htdocs"
 		}
 	},
+	"BILLING_MODULE":"",
 	"TRELLO_KEY":"your_trello_api_key",
 	"TRELLO_TOKEN":"your_trello_member_token",
 	"TRELLO_BOARDS":{
@@ -32,7 +32,7 @@
 			"LOCAL_PROJECTS":[
 				{
 					"name":"Project-B",
-					"folder_path":"%AGENTS_ROOT%/project-b"
+					"folder_path":"~/projects/project-b"
 				}
 			],
 			"LAST_CHECKED":null

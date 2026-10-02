@@ -1,17 +1,16 @@
 const fs = require('fs');
 const path = require('path');
 const {spawnSync} = require('child_process');
-const {findProject, resolveWorkspaceRoot, toAgentsRelative, loadBilling} = require('./paths.js');
-// Session rows and billing items belong to the optional billing-manager skill; without it runs stay unbilled
+const {findProject, resolveWorkspaceRoot, loadBilling} = require('./paths.js');
+// Session rows and billing items belong to the optional BILLING_MODULE; without it runs stay unbilled
 const billing = loadBilling();
 
 const CONTROLLER = path.join(__dirname, 'controller.js');
-// Sibling tool folder: tools/trello <-> tools/telegram
-const TELEGRAM_DIR = path.join(__dirname, '..', 'telegram');
-const TELEGRAM = path.join(TELEGRAM_DIR, 'controller.js');
 const PROJECTS_PATH = path.join(__dirname, 'projects.json');
 const LOG_PATH = path.join(__dirname, 'autopilot.log');
 const ITEM_BLOCK = /<billing-item>([\s\S]*?)<\/billing-item>/i;
+const RESULT_PREFIX = 'AUTOPILOT_RESULT ';
+const EXIT_CODES = {done: 0, idle: 0, skipped: 0, error: 1, roadblock: 2};
 
 const DEFAULTS = {
 	label: 'Autopilot',
@@ -136,7 +135,7 @@ async function pickCard(api, boardUrl, board, opts, label, labelColor = 'sky') {
 			throw new Error(`Karte ${opts.card} liegt nicht in "${incoming.name}" dieses Boards`);
 		}
 		if(!hasLabel(card, label) && opts.approve && !opts.dryRun) {
-			// Explicit approval (Telegram /go): attach the existing board label, create it only once
+			// Explicit approval by the caller: attach the existing board label, create it only once
 			const labels = await api(`/boards/${boardId}/labels?fields=name,color`);
 			let target = labels.find(l => (l.name || '').toLowerCase() === label.toLowerCase());
 			if(!target) {
@@ -220,8 +219,8 @@ function buildPrompt(ticket, withBillingItem = false) {
 		'</ticket>',
 		'',
 		'Rules:',
-		'- Implement the ticket completely inside the current working directory. Follow the project AGENTS.md / CLAUDE.md and ~/.agents-global/skills/coding-guidelines/SKILL.md style (tabs only, `if(` without space, spaces around operators).',
-		'- Never modify anything under .agents/ or ~/.agents-global/, never touch credentials or .env files, never run git.',
+		'- Implement the ticket completely inside the current working directory. Follow the project AGENTS.md / CLAUDE.md and the existing code style.',
+		'- Never modify files outside the current working directory or agent configuration folders (.agents/, .claude/), never touch credentials or .env files, never run git.',
 		'- Do not ask questions. If the ticket is ambiguous, unsafe or blocked, change nothing and reply with a first line starting with "ROADBLOCK:" plus the reason.',
 		'- End with a short German summary (max 8 bullet points) of what changed, with file names relative to the working directory.',
 		...(withBillingItem ? billingRule : [])
@@ -281,17 +280,27 @@ function dispatchAgent(root, ticket, settings, withBillingItem = false) {
 	return {ok: !isError && !roadblock, roadblock, summary: split.summary || summary, billingItem: split.item};
 }
 
-// ==================== TELEGRAM ====================
-function notify(text) {
-	const cfg = readJson(path.join(TELEGRAM_DIR, 'config.json'), null);
-	const chatId = cfg && (cfg.NOTIFY_CHAT_ID || (cfg.ALLOWED_USER_IDS || [])[0]);
-	if(!chatId || !fs.existsSync(TELEGRAM)) {
-		log('Telegram notification skipped (no config/chat id).');
-		return;
+// ==================== RESULT LINE ====================
+function makeResult(status, fields = {}) {
+	return {status, project: '', card: null, duration: '', reason: '', message: '', billing: '', git: '', checks: '', failedChecks: [], summary: '', ...fields};
+}
+
+/* ONE MACHINE-READABLE LINE ON STDOUT; THE CALLER (CHAT BOT, CRON WRAPPER) DECIDES HOW TO REPORT IT */
+function formatResult(result) {
+	return RESULT_PREFIX + JSON.stringify(result);
+}
+
+/* LAST RESULT LINE IN A CAPTURED STDOUT, null IF THERE IS NONE OR IT IS BROKEN */
+function parseResult(output) {
+	const line = String(output || '').split(/\r?\n/).reverse().find(l => l.startsWith(RESULT_PREFIX));
+	if(!line) {
+		return null;
 	}
-	const res = run(process.execPath, [TELEGRAM, 'send', String(chatId), text], {timeout: 60000});
-	if(res.status !== 0) {
-		log(`Telegram notification failed: ${(res.stderr || res.error).trim()}`);
+	try {
+		return JSON.parse(line.slice(RESULT_PREFIX.length));
+	}
+	catch(e) {
+		return null;
 	}
 }
 
@@ -300,10 +309,11 @@ const opts = parseArgs(process.argv.slice(2));
 
 async function main() {
 	if(opts.help) {
-		console.log('Usage: node $HOME/.agents-global/tools/trello/autopilot.js [--board <project|board>] [--card <shortLink> [--approve]] [--dry-run]');
+		console.log('Usage: node autopilot.js [--board <project|board>] [--card <shortLink> [--approve]] [--dry-run]');
 		console.log('Without --board the project is resolved from the current directory.');
-		console.log('--approve attaches the gate label to --card (explicit human approval, e.g. Telegram /go).');
-		return;
+		console.log('--approve attaches the gate label to --card (explicit human approval by the caller).');
+		console.log(`The run ends with one line "${RESULT_PREFIX}{json}" on stdout; exit 0 done/idle/skipped, 1 error, 2 roadblock.`);
+		return null;
 	}
 	const settings = loadSettings();
 	const projects = readJson(PROJECTS_PATH, null);
@@ -327,10 +337,7 @@ async function main() {
 	if(fs.existsSync(path.join(root, 'active_ticket.json'))) {
 		const msg = `${ctx} Übersprungen: active_ticket.json existiert (laufende Session oder offener Roadblock).`;
 		log(msg);
-		if(!opts.dryRun) {
-			notify(`⏸ *Autopilot* ${msg}`);
-		}
-		return;
+		return makeResult('skipped', {project: project.name, message: msg});
 	}
 
 	// 3. Git preflight: never mix the agent diff with uncommitted user work
@@ -344,10 +351,7 @@ async function main() {
 	const card = await pickCard(api, boardUrl, board, opts, settings.label, settings.labelColor);
 	if(!card) {
 		log(`${ctx} Keine Karte mit Label "${settings.label}" in der Inbox.`);
-		if(!opts.dryRun) {
-			notify(`💤 *Autopilot* ${ctx} Keine Karte mit Label \`${settings.label}\` in der Inbox.`);
-		}
-		return;
+		return makeResult('idle', {project: project.name, message: `${ctx} Keine Karte mit Label \`${settings.label}\` in der Inbox.`});
 	}
 	const billingPath = billing ? billing.logPathFor(root) : '';
 	const billingActive = Boolean(billingPath) && fs.existsSync(billingPath);
@@ -357,17 +361,17 @@ async function main() {
 			project: project.name,
 			workspace: path.basename(root),
 			card: {shortLink: card.shortLink, title: card.name},
-			billing: billingActive ? toAgentsRelative(billingPath) : 'inaktiv',
+			billing: billingActive ? path.basename(billingPath) : 'inaktiv',
 			git: gitBefore.isRepo ? `HEAD ${gitBefore.head}` : 'kein Repo',
 			agent: `${settings.agentCommand} ${settings.agentArgs.join(' ')}`
 		}, null, '\t'));
-		return;
+		return null;
 	}
 
 	log(`${ctx} Start ${card.shortLink} "${card.name}"`);
 	const startedAt = Date.now();
 
-	// 5. Billing session (skills/billing-manager) + controller start (creates active_ticket.json in the workspace root)
+	// 5. Billing session (BILLING_MODULE) + controller start (creates active_ticket.json in the workspace root)
 	const dropBilling = () => {
 		try {
 			billing.dropSession(billingPath);
@@ -381,7 +385,7 @@ async function main() {
 			billing.openSession(billingPath, card.name);
 		}
 		catch(e) {
-			throw new Error(`${ctx} ${e.message} (${toAgentsRelative(billingPath)})`);
+			throw new Error(`${ctx} ${e.message} (${path.basename(billingPath)})`);
 		}
 	}
 	const started = controller(['start', card.shortLink], root, project.name);
@@ -403,7 +407,7 @@ async function main() {
 
 	const gitLine = diff ? `Basis \`${gitBefore.head}\`, uncommitted: ${diff.count} Datei(en) – ${diff.stat}` : 'kein Git-Repo (Diff nicht verfügbar)';
 	const checkLine = checks.length ? checks.map(c => `${c.name} ${c.ok ? '✓' : '✗'}`).join(', ') : 'keine Checks definiert (ungeprüft)';
-	const header = `*Ticket:* ${card.name} (\`${card.shortLink}\`)\n*Projekt:* ${project.name}\n*Dauer:* ${duration}`;
+	const report = {project: project.name, card: {shortLink: card.shortLink, title: card.name}, duration, git: gitLine, checks: checkLine};
 	controller(['comment', card.shortLink, `🤖 Autopilot-Bericht\n\n${agent.summary.slice(0, 3000)}\n\nChecks: ${checkLine}`], root, project.name);
 
 	// 8a. Roadblock: card stays in Active, active_ticket.json stays as lock, no billing for the failed run
@@ -411,15 +415,17 @@ async function main() {
 		if(billingActive) {
 			dropBilling();
 		}
-		const failed = checks.filter(c => !c.ok).map(c => `\n\`${c.name}\`:\n\`\`\`\n${c.tail}\n\`\`\``).join('');
 		const reason = agent.roadblock ? 'Agent meldet Roadblock' : (!agent.ok ? 'Agent-Lauf fehlgeschlagen' : 'Checks fehlgeschlagen');
 		log(`${ctx} Roadblock ${card.shortLink}: ${reason}`);
-		notify(`⚠️ *Autopilot Roadblock* – ${reason}\n${header}\n*Git:* ${gitLine}\n*Checks:* ${checkLine}\n\n${agent.summary.slice(0, 1500)}${failed}\n\n_Karte bleibt in Active, active\\_ticket.json blockiert weitere Läufe._`);
-		process.exitCode = 2;
-		return;
+		return makeResult('roadblock', {
+			...report,
+			reason,
+			failedChecks: checks.filter(c => !c.ok).map(c => ({name: c.name, tail: c.tail})),
+			summary: agent.summary
+		});
 	}
 
-	// 8b. Complete: controller moves the card and deletes active_ticket.json, billing-manager closes the row + appends the item
+	// 8b. Complete: controller moves the card and deletes active_ticket.json, the billing module closes the row + appends the item
 	const completed = controller(['complete', card.shortLink], root, project.name);
 	if(completed.status !== 0 || fs.existsSync(ticketPath)) {
 		throw new Error(`${ctx} controller complete fehlgeschlagen:\n${(completed.stderr || completed.stdout).trim().slice(-800)}`);
@@ -429,7 +435,7 @@ async function main() {
 		try {
 			const closed = billing.closeSession(billingPath);
 			billing.appendItem(billingPath, composeBillingItem(agent.billingItem, card, closed));
-			billingLine = `eingetragen in \`${toAgentsRelative(billingPath)}\` (Ist ${closed.actual}, Abrechnung ${closed.mean})`;
+			billingLine = `eingetragen in \`${path.basename(billingPath)}\` (Ist ${closed.actual}, Abrechnung ${closed.mean})`;
 			if(!agent.billingItem) {
 				billingLine += '\n⚠️ Rechnungsposition aus Vorlage – bitte überarbeiten';
 			}
@@ -439,20 +445,34 @@ async function main() {
 		}
 	}
 	log(`${ctx} Erledigt ${card.shortLink} in ${duration}`);
-	notify(`✅ *Autopilot erledigt*\n${header}\n*Billing:* ${billingLine}\n*Git:* ${gitLine}\n*Checks:* ${checkLine}\n\n${agent.summary.slice(0, 2000)}`);
+	return makeResult('done', {...report, billing: billingLine, summary: agent.summary});
 }
 
 if(require.main === module) {
-	main().catch(err => {
-		log(`Abbruch: ${err.message}`);
-		if(!opts.dryRun) {
-			notify(`⛔ *Autopilot abgebrochen*\n${err.message.slice(0, 1500)}`);
-		}
-		process.exitCode = 1;
-	});
+	// A caller reading through a pipe may vanish mid-run (e.g. bot restart); a lost report must not abort the run
+	process.stdout.on('error', () => {});
+	process.stderr.on('error', () => {});
+	main()
+		.then(result => {
+			if(result && !opts.dryRun) {
+				console.log(formatResult(result));
+				process.exitCode = EXIT_CODES[result.status];
+			}
+		})
+		.catch(err => {
+			log(`Abbruch: ${err.message}`);
+			if(!opts.dryRun) {
+				console.log(formatResult(makeResult('error', {message: err.message})));
+			}
+			process.exitCode = 1;
+		});
 }
 
 module.exports = {
+	EXIT_CODES,
+	makeResult,
+	formatResult,
+	parseResult,
 	extractBillingItem,
 	composeBillingItem,
 	buildPrompt,

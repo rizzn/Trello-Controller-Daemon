@@ -34,26 +34,15 @@ one central `projects.json`: card management, **session tracking** for AI coding
 Requires **Node.js 18 or newer** (`autopilot.js` uses the global `fetch`). Only Node core modules
 are used: no `npm install`, no `node_modules`.
 
-1. Clone this repository into a central agents folder, e.g. `<agents-root>/tools/trello/`.
-2. Point one profile link per machine at that agents folder. Projects need no link of their own.
-
-   ```powershell
-   # Windows, no admin rights needed
-   New-Item -ItemType Junction -Path "$HOME\.agents-global" -Target "<agents-root>"
-   ```
-
-   ```bash
-   # macOS / Linux
-   ln -s "<agents-root>" "$HOME/.agents-global"
-   ```
-
-3. Copy `projects.example.json` to `projects.json` and fill in key, token and boards
+1. Clone this repository into any folder; `<trello-dir>` below stands for that folder. It needs
+   no sibling tools and no fixed location.
+2. Copy `projects.example.json` to `projects.json` and fill in key, token and boards
    ([Configuration](#configuration)).
-4. Run the controller from inside a registered project folder. The working directory selects the
+3. Run the controller from inside a registered project folder. The working directory selects the
    project:
 
    ```bash
-   node $HOME/.agents-global/tools/trello/controller.js list
+   node <trello-dir>/controller.js list
    ```
 
 ## Structure
@@ -61,8 +50,8 @@ are used: no `npm install`, no `node_modules`.
 | Path | Content |
 |---|---|
 | `controller.js` | CLI: cards, sessions, inbox processing, label sync, `listen` daemon loop |
-| `autopilot.js` | One card per run: Trello → headless agent → checks → Trello and Telegram |
-| `paths.js` | Path tokens (`PATH_VARS`), project lookup by working directory |
+| `autopilot.js` | One card per run: Trello → headless agent → checks → Trello and a result line |
+| `paths.js` | Path tokens (`PATH_VARS`), project lookup by working directory, billing hook |
 | `global_runner.js` | One `sync` + `inbox` pass over every registered board |
 | `install_daemon.ps1`, `run_silent.vbs` | Windows scheduled task `TrelloInboxProcessor` |
 | `start-trello.ps1`, `stop-trello.ps1` | Enable or disable that task |
@@ -79,9 +68,10 @@ Copy `projects.example.json`. One file holds the credentials and every board:
 ```jsonc
 {
 	"PATH_VARS":{                                   // token values per machine, see below
-		"*":{"HTDOCS":"%AGENTS_ROOT%/../htdocs"},
+		"*":{"HTDOCS":"~/htdocs"},
 		"YOUR-HOSTNAME":{"HTDOCS":"C:/xampp/htdocs"}
 	},
+	"BILLING_MODULE":"",                            // optional, see Autopilot; tokens allowed
 	"TRELLO_KEY":"your_trello_api_key",
 	"TRELLO_TOKEN":"your_trello_member_token",
 	"TRELLO_BOARDS":{
@@ -109,10 +99,10 @@ Copy `projects.example.json`. One file holds the credentials and every board:
 `folder_path` never contains a drive letter, so the same `projects.json` works on several
 machines (e.g. synced via Dropbox).
 
-- **Tokens:** `%VAR%`, `${VAR}`, `~` and the built-in `%AGENTS_ROOT%` (the central agents folder).
+- **Tokens:** `%VAR%`, `${VAR}` and `~`. There are no built-in tokens.
 - **`PATH_VARS`:** one block per hostname (`os.hostname()`) plus an optional `"*"` block for all
-  machines. Drive letters live only there. Precedence: host block > `"*"` > process environment >
-  built-in `AGENTS_ROOT`. Values may use tokens themselves.
+  machines. Drive letters live only there. Precedence: host block > `"*"` > process environment.
+  Values may use tokens themselves.
 - **Fallback:** if a token cannot be resolved, the last path segment is matched against the name
   of the current folder, so running from inside the project always works.
 
@@ -149,7 +139,7 @@ machines (e.g. synced via Dropbox).
 
 ## Commands
 
-All commands run as `node $HOME/.agents-global/tools/trello/controller.js <command>` from inside
+All commands run as `node <trello-dir>/controller.js <command>` from inside
 the project folder.
 
 | Command | Arguments | Purpose |
@@ -173,13 +163,13 @@ the project folder.
 | `listen` | `[intervalMinutes]` | Poll the inbox in the foreground; default `0.1667` (10 s) |
 | `news` / `unread` | `[peek]` | New tickets across all boards; `peek` leaves `LAST_CHECKED` untouched |
 | `status` | — | State of the daemon process and the scheduled task |
-| `projects` | — | Registered projects, the `~/.agents-global` link, legacy project `.agents` links |
+| `projects` | — | Registered projects and whether their folders exist on this machine |
 | `backup` | — | Export the board to `board_backup.txt` |
 
 ```bash
-node $HOME/.agents-global/tools/trello/controller.js add "[BUG] Button dead on mobile" "Steps: …"
-node $HOME/.agents-global/tools/trello/controller.js move AbCd1234 "Active Tickets"
-node $HOME/.agents-global/tools/trello/controller.js news peek
+node <trello-dir>/controller.js add "[BUG] Button dead on mobile" "Steps: …"
+node <trello-dir>/controller.js move AbCd1234 "Active Tickets"
+node <trello-dir>/controller.js news peek
 ```
 
 ## Session tracking
@@ -203,9 +193,9 @@ An agent (or a human) works a ticket in two steps:
 `autopilot.js` processes exactly one card per run and never commits:
 
 ```bash
-node $HOME/.agents-global/tools/trello/autopilot.js --dry-run              # show the card it would take
-node $HOME/.agents-global/tools/trello/autopilot.js --board project-a      # project or board context
-node $HOME/.agents-global/tools/trello/autopilot.js --board project-a --card AbCd1234 --approve
+node <trello-dir>/autopilot.js --dry-run              # show the card it would take
+node <trello-dir>/autopilot.js --board project-a      # project or board context
+node <trello-dir>/autopilot.js --board project-a --card AbCd1234 --approve
 ```
 
 1. Resolves the project from `--board` or the current folder.
@@ -216,19 +206,33 @@ node $HOME/.agents-global/tools/trello/autopilot.js --board project-a --card AbC
 4. Runs `start`, pipes the ticket to the agent CLI (`agentCommand` / `agentArgs`; default
    `claude -p` without Bash) and then the `checks` npm scripts.
 5. Success: `complete`. Roadblock: the card stays active and `active_ticket.json` stays as lock.
-6. Posts a summary as card comment and sends a report via the sibling tool
-   `../telegram/controller.js` (`NOTIFY_CHAT_ID` in its `config.json`); skipped without it.
+6. Posts a summary as card comment and ends with one result line on stdout. Reporting it (chat,
+   mail, cron log) is the caller's job.
 
-- **Billing (optional):** with the `billing-manager` skill in the agents folder
-  (`skills/billing-manager/scripts/billing.js`) and an existing log for the workspace, the
-  autopilot books the run and a billing item; failed runs are not billed. Without the skill the
-  report shows billing as inactive.
+The result line is `AUTOPILOT_RESULT ` followed by one line of JSON with the fields `status`,
+`project`, `card`, `duration`, `reason`, `message`, `billing`, `git`, `checks`, `failedChecks` and
+`summary`. `parseResult()` in `autopilot.js` reads it from captured output. `--dry-run` prints its
+own preview instead.
+
+| Exit | `status` | Meaning |
+|---|---|---|
+| `0` | `done` | Card completed |
+| `0` | `idle` | No inbox card carries the gate label |
+| `0` | `skipped` | `active_ticket.json` locks the project |
+| `1` | `error` | Aborted: config, Git preflight, Trello or controller failure |
+| `2` | `roadblock` | Agent or checks failed; the card stays active |
+
+- **Billing (optional):** set `BILLING_MODULE` in `projects.json` to a Node module that exports
+  `logPathFor(root)`, `openSession(log, title)`, `closeSession(log)` (returns `{actual, estimate,
+  mean}`), `dropSession(log)` and
+  `appendItem(log, text)`. If the module loads and its log for the workspace exists, the autopilot
+  books the run and a billing item; failed runs are not billed. Without it billing is inactive.
 
 ## Background daemon
 
 ```bash
-node $HOME/.agents-global/tools/trello/global_runner.js            # one sync + inbox pass, all boards
-node $HOME/.agents-global/tools/trello/controller.js listen 0.1667  # foreground loop, 10 s interval
+node <trello-dir>/global_runner.js            # one sync + inbox pass, all boards
+node <trello-dir>/controller.js listen 0.1667  # foreground loop, 10 s interval
 ```
 
 - **Windows:** `powershell -ExecutionPolicy Bypass -File install_daemon.ps1` registers the task
@@ -237,7 +241,7 @@ node $HOME/.agents-global/tools/trello/controller.js listen 0.1667  # foreground
 - **macOS / Linux:** run the loop under PM2, launchd or cron:
 
   ```bash
-  pm2 start "node $HOME/.agents-global/tools/trello/controller.js listen 0.1667" --name trello-daemon
+  pm2 start "node <trello-dir>/controller.js listen 0.1667" --name trello-daemon
   ```
 
 ## Email merging and reopening

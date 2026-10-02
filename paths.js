@@ -2,28 +2,22 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-/* ROOT OF THE CENTRAL .agents FOLDER: FIRST ANCESTOR NAMED .agents (SYMLINKS ARE ALREADY RESOLVED), ELSE tools/<tool>/../.. */
-function findAgentsRoot(dir) {
-	for(let d = dir; d !== path.dirname(d); d = path.dirname(d)) {
-		if(path.basename(d).toLowerCase() === '.agents') {
-			return d;
-		}
-	}
-	return path.join(dir, '..', '..');
-}
-const AGENTS_ROOT = findAgentsRoot(__dirname);
 const PROJECTS_PATH = path.join(__dirname, 'projects.json');
+
+function readProjects() {
+	try {
+		return JSON.parse(fs.readFileSync(PROJECTS_PATH, 'utf8'));
+	}
+	catch(e) {
+		return null;
+	}
+}
 
 /* PATH_VARS FROM projects.json: "*" APPLIES EVERYWHERE, A HOSTNAME KEY OVERRIDES IT ON THAT MACHINE */
 function configVars(projects = null, host = os.hostname()) {
-	let data = projects;
+	const data = projects || readProjects();
 	if(!data) {
-		try {
-			data = JSON.parse(fs.readFileSync(PROJECTS_PATH, 'utf8'));
-		}
-		catch(e) {
-			return {};
-		}
+		return {};
 	}
 	const table = data.PATH_VARS || {};
 	const hostKey = Object.keys(table).find(k => k.toLowerCase() === host.toLowerCase());
@@ -43,11 +37,8 @@ function expandPath(raw, env = defaultScope(), depth = 0) {
 	const lookup = name => {
 		const key = Object.keys(env).find(k => k.toUpperCase() === name.toUpperCase());
 		if(key && depth < 3) {
-			// Values may themselves use tokens, e.g. "HTDOCS": "%AGENTS_ROOT%/../htdocs"
+			// Values may themselves use tokens, e.g. "HTDOCS": "%WWW%/htdocs"
 			return expandPath(String(env[key]), env, depth + 1);
-		}
-		if(name.toUpperCase() === 'AGENTS_ROOT') {
-			return AGENTS_ROOT;
 		}
 		return null;
 	};
@@ -133,29 +124,13 @@ function resolveWorkspaceRoot(project, cwd = process.cwd(), env = defaultScope()
 	return null;
 }
 
-/* PATH RELATIVE TO THE .agents ROOT FOR LOGS AND REPORTS, E.G. '.agents/skills/billing-manager/output/billing-pec.md' */
-function toAgentsRelative(p) {
-	if(!p) {
-		return '';
-	}
-	const rel = path.relative(AGENTS_ROOT, p).replace(/\\/g, '/');
-	if(!rel.startsWith('..') && !path.isAbsolute(rel)) {
-		return `.agents/${rel}`;
-	}
-	// Reached through a project's .agents link (e.g. <project>/.agents/skills/x.md)
-	const norm = p.replace(/\\/g, '/');
-	const idx = norm.lastIndexOf('/.agents/');
-	return idx !== -1 ? norm.slice(idx + 1) : path.basename(p);
-}
-
-/* OPTIONAL billing-manager SKILL IN THE .agents ROOT: ITS MODULE, OR null IN A STANDALONE CLONE OF THIS REPO */
-function loadBilling(root = AGENTS_ROOT) {
-	const file = path.join(root, 'skills', 'billing-manager', 'scripts', 'billing.js');
-	return fs.existsSync(file) ? require(file) : null;
+/* OPTIONAL BILLING HOOK: THE MODULE NAMED BY BILLING_MODULE IN projects.json (TOKENS ALLOWED), null WITHOUT IT OR IF THE PATH DOES NOT RESOLVE */
+function loadBilling(projects = readProjects(), env = defaultScope()) {
+	const file = expandPath(projects && projects.BILLING_MODULE, env);
+	return file && fs.existsSync(file) ? require(file) : null;
 }
 
 module.exports = {
-	AGENTS_ROOT,
 	loadBilling,
 	configVars,
 	defaultScope,
@@ -163,6 +138,5 @@ module.exports = {
 	folderBaseName,
 	projectMatchesDir,
 	findProject,
-	resolveWorkspaceRoot,
-	toAgentsRelative
+	resolveWorkspaceRoot
 };

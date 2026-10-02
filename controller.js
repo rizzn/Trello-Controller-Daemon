@@ -1234,8 +1234,6 @@ function showProjects() {
 	
 	const projects=JSON.parse(fs.readFileSync(projectsPath,'utf8'));
 	const boards=projects.TRELLO_BOARDS||{};
-	const profileLink = path.join(require('os').homedir(), '.agents-global');
-	console.log(`\x1b[36mProfile link:\x1b[0m ~/.agents-global ${fs.existsSync(profileLink) ? '\x1b[32mOK\x1b[0m' : '\x1b[31mmissing (run tools/setup/machine-check.ps1)\x1b[0m'}`);
 
 	for(const boardUrl of Object.keys(boards)) {
 		console.log(`\n\x1b[36mBoard: ${boardUrl}\x1b[0m`);
@@ -1248,14 +1246,9 @@ function showProjects() {
 			for(const p of localProjects) {
 				const resolvedFolder=expandPath(p.folder_path);
 				const folderExists=!!resolvedFolder&&fs.existsSync(resolvedFolder);
-				// Projects need no .agents link any more (profile link ~/.agents-global); an old one is only reported
-				const legacyLink = folderExists && fs.existsSync(path.join(resolvedFolder, '.agents'));
 
 				console.log(`  - \x1b[1m${p.name}\x1b[0m`);
 				console.log(`    Path:    ${p.folder_path} (${folderExists?'\x1b[32mExists\x1b[0m':'\x1b[31mNot Found\x1b[0m'})`);
-				if(legacyLink) {
-					console.log('    Link:    \x1b[33mlegacy .agents link (not needed, remove with cmd /c rmdir)\x1b[0m');
-				}
 			}
 		}
 	}
@@ -1272,7 +1265,7 @@ else if(command === 'add') {
     const desc = args[2] || '';
     const listName = args[3] || '';
     if(!title) {
-        console.error('Usage: node trello.js add "Card Title" ["Card Description"] ["ListName"]');
+        console.error('Usage: node controller.js add "Card Title" ["Card Description"] ["ListName"]');
         process.exit(1);
     }
     addCard(title, desc, listName);
@@ -1281,7 +1274,7 @@ else if(command === 'move') {
     const cardLink = args[1];
     const listName = args[2];
     if(!cardLink || !listName) {
-        console.error('Usage: node trello.js move "shortLink" "ListName"');
+        console.error('Usage: node controller.js move "shortLink" "ListName"');
         process.exit(1);
     }
     moveCard(cardLink, listName);
@@ -1289,7 +1282,7 @@ else if(command === 'move') {
 else if(command === 'archive') {
     const cardLink = args[1];
     if(!cardLink) {
-        console.error('Usage: node trello.js archive "shortLink"');
+        console.error('Usage: node controller.js archive "shortLink"');
         process.exit(1);
     }
     archiveCard(cardLink);
@@ -1297,7 +1290,7 @@ else if(command === 'archive') {
 else if(command === 'delete') {
     const cardLink = args[1];
     if(!cardLink) {
-        console.error('Usage: node trello.js delete "shortLink"');
+        console.error('Usage: node controller.js delete "shortLink"');
         process.exit(1);
     }
     deleteCard(cardLink);
@@ -1307,7 +1300,7 @@ else if(command === 'label') {
     const color = args[2];
     const labelName = args.slice(3).join(' ');
     if(!cardLink || !color) {
-        console.error('Usage: node trello.js label "shortLink" "Color" ["LabelName"]  |  label "shortLink" "LabelName"');
+        console.error('Usage: node controller.js label "shortLink" "Color" ["LabelName"]  |  label "shortLink" "LabelName"');
         process.exit(1);
     }
     addLabel(cardLink, color, labelName);
@@ -1316,7 +1309,7 @@ else if(command === 'comment') {
     const cardLink = args[1];
     const text = args[2];
     if(!cardLink || !text) {
-        console.error('Usage: node trello.js comment "shortLink" "CommentText"');
+        console.error('Usage: node controller.js comment "shortLink" "CommentText"');
         process.exit(1);
     }
     addComment(cardLink, text);
@@ -1325,7 +1318,7 @@ else if(command === 'desc') {
     const cardLink = args[1];
     const desc = args[2];
     if(!cardLink || !desc) {
-        console.error('Usage: node trello.js desc "shortLink" "NewDescription"');
+        console.error('Usage: node controller.js desc "shortLink" "NewDescription"');
         process.exit(1);
     }
     editCardDesc(cardLink, desc);
@@ -1334,7 +1327,7 @@ else if(command === 'check') {
     const cardLink = args[1];
     const itemName = args[2];
     if(!cardLink || !itemName) {
-        console.error('Usage: node trello.js check "shortLink" "TaskName"');
+        console.error('Usage: node controller.js check "shortLink" "TaskName"');
         process.exit(1);
     }
     addCheckItem(cardLink, itemName);
@@ -1343,7 +1336,7 @@ else if(command === 'check-done') {
     const cardLink = args[1];
     const itemName = args[2];
     if(!cardLink || !itemName) {
-        console.error('Usage: node trello.js check-done "shortLink" "TaskName"');
+        console.error('Usage: node controller.js check-done "shortLink" "TaskName"');
         process.exit(1);
     }
     completeCheckItem(cardLink, itemName);
@@ -1351,7 +1344,7 @@ else if(command === 'check-done') {
 else if(command === 'search') {
     const query = args[1];
     if(!query) {
-        console.error('Usage: node trello.js search "SearchTerm"');
+        console.error('Usage: node controller.js search "SearchTerm"');
         process.exit(1);
     }
     searchCards(query);
@@ -1360,7 +1353,7 @@ else if(command === 'complete') {
     const cardLink = args[1];
     const manualTimeEstimate = args[2] || '';
     if(!cardLink) {
-        console.error('Usage: node trello.js complete "shortLink" ["ManualTimeEstimate"]');
+        console.error('Usage: node controller.js complete "shortLink" ["ManualTimeEstimate"]');
         process.exit(1);
     }
     completeSession(cardLink, manualTimeEstimate);
@@ -1374,7 +1367,7 @@ else if(command === 'sort') {
 else if(command === 'start') {
     const cardLink = args[1];
     if(!cardLink) {
-        console.error('Usage: node trello.js start "shortLink"');
+        console.error('Usage: node controller.js start "shortLink"');
         process.exit(1);
     }
     startCard(cardLink);
