@@ -13,7 +13,7 @@
 
 # Trello Controller Daemon
 
-A lightweight, configuration-driven command-line interface (CLI) and background daemon runner for managing and automating multiple Trello boards, featuring built-in session tracking. Billing logs are not part of this tool — they live in the [`billing-manager`](../../skills/billing-manager/SKILL.md) skill.
+A lightweight, configuration-driven command-line interface (CLI) and background daemon runner for managing and automating multiple Trello boards, featuring built-in session tracking.
 
 Built completely in native Node.js without heavy external dependencies.
 
@@ -41,7 +41,7 @@ Built completely in native Node.js without heavy external dependencies.
 - **Automated Label Parsing:** Parses custom ticket prefixes (like `[BUG]`, `[FEATURE]`) in card titles, cleans card titles on Trello, and automatically applies corresponding color-coded labels.
 - **Session Tracking (`start` / `complete` / `check-done`):**
   - Track session durations via `active_ticket.json` and post actual and estimated time as a card comment.
-  - Billing rows and client billing items are written by the [`billing-manager`](../../skills/billing-manager/SKILL.md) skill, not by this tool.
+  - **Billing is optional:** with the `billing-manager` skill in the `.agents` root (`skills/billing-manager/scripts/billing.js`), `complete` uses its estimate rule and the autopilot writes session rows and billing items. Without it the tool runs unchanged; the comment shows the actual time and the autopilot reports billing as inactive.
 - **Project-Agnostic Registry (`projects.json`):** Manage multiple local projects and their Trello credentials from a single, centralized configuration.
 - **Background Daemon Polling (`listen` / Runner):** Set up a background cron/task to periodically poll inbox lists and parse cards silently.
 - **Automatic Ticket Merging (E-Mail Threading):** Automatically merges email replies/updates (e.g. `Re:`, `Aw:`) sent to the board's email address into existing cards as comments by matching normalized titles, copying description texts, and transferring files/attachments.
@@ -203,7 +203,7 @@ node $HOME/.agents-global/tools/trello/controller.js news
 
 ### Session Tracking Workflow
 
-The controller tracks the session on the card; the billing log (session row, client billing item) is handled separately by the [`billing-manager`](../../skills/billing-manager/SKILL.md) skill, the same way with or without Trello.
+The controller tracks the session on the card.
 
 #### Step 1: Start a Session
 Start the card (moves it to "Active Tickets", posts a start comment and writes `active_ticket.json` with the start time):
@@ -239,7 +239,6 @@ This tool is designed to seamlessly integrate with modern **AI Coding Environmen
    - Moves the card to the completed list.
    - Calculates the exact time elapsed during the session and posts it as a comment.
    - Deletes `active_ticket.json`.
-6. **Billing:** If billing is active for the workspace, the agent closes the session row and appends the billing item with the [`billing-manager`](../../skills/billing-manager/SKILL.md) skill.
 
 This allows the agent to handle the entire lifecycle of a ticket, from start to completion, with zero human overhead.
 

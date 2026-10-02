@@ -2,9 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const {execSync} = require('child_process');
-const {AGENTS_ROOT, expandPath, findProject, projectMatchesDir} = require('./paths.js');
-// Session timing rules live in the billing-manager skill; the controller only reuses the estimate rule for its card comment
-const billing = require(path.join(AGENTS_ROOT, 'skills', 'billing-manager', 'scripts', 'billing.js'));
+const {expandPath, findProject, projectMatchesDir, loadBilling} = require('./paths.js');
+// Optional billing-manager skill: with it the card comment uses its estimate rule, without it the actual time
+const billing = loadBilling();
 
 // 1. Load configuration from the central projects.json
 const projectsPath=path.join(__dirname,'projects.json');
@@ -264,7 +264,12 @@ async function addCard(title,desc='',listName='') {
 		const lists=await apiRequest('GET',`/boards/${boardId}/lists`);
 		if(lists.length===0) throw 'No lists found on the board!';
 		
-		let targetList=lists[0];
+		// Without a list name the card goes to the board's inbox (TRELLO_LIST_INCOMING), not the first list
+		let targetList=lists.find(l=>l.name.toLowerCase().includes(INBOX_LIST_NAME.toLowerCase()));
+		if(!targetList) {
+			console.warn(`Inbox list "${INBOX_LIST_NAME}" not found, falling back to "${lists[0].name}".`);
+			targetList=lists[0];
+		}
 		if(listName) {
 			const found=lists.find(l=>l.name.toLowerCase().includes(listName.toLowerCase()));
 			if(found) targetList=found;
@@ -1048,7 +1053,7 @@ async function completeSession(cardShortLink, manualTimeEstimate = '') {
 			}
 		}
 
-		// 3. Completion comment with durations, only for a session started with "start" (billing lives in skills/billing-manager)
+		// 3. Completion comment with durations, only for a session started with "start"
 		if(!startedAt) {
 			console.log('No started session for this card: card moved, no duration comment.');
 			return;
@@ -1056,7 +1061,7 @@ async function completeSession(cardShortLink, manualTimeEstimate = '') {
 		const now = new Date();
 		const durationMin = Math.max(0, Math.round((now - startedAt) / 60000));
 		const actualTimeText = commentDuration(durationMin);
-		const estTimeText = manualTimeEstimate || commentDuration(billing.defaultEstimate(durationMin));
+		const estTimeText = manualTimeEstimate || (billing ? commentDuration(billing.defaultEstimate(durationMin)) : actualTimeText);
 		const completionComment = MSG_PROCESSING_COMPLETED
 			.replace('{timestamp}', now.toLocaleString('de-DE'))
 			.replace('{actual_duration}', actualTimeText)
@@ -1068,7 +1073,7 @@ async function completeSession(cardShortLink, manualTimeEstimate = '') {
 		} catch(commentErr) {
 			console.error('Error posting completion comment:', commentErr.message || commentErr);
 		}
-		console.log('\x1b[32mCard completed. Close the billing session with skills/billing-manager (billing.js close).\x1b[0m');
+		console.log('\x1b[32mCard completed.\x1b[0m');
 	} catch(error) {
 		console.error(error);
 		process.exitCode = 1;

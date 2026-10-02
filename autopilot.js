@@ -1,9 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const {spawnSync} = require('child_process');
-const {AGENTS_ROOT, findProject, resolveWorkspaceRoot, toAgentsRelative} = require('./paths.js');
-// Session rows and billing items belong to the billing-manager skill
-const billing = require(path.join(AGENTS_ROOT, 'skills', 'billing-manager', 'scripts', 'billing.js'));
+const {findProject, resolveWorkspaceRoot, toAgentsRelative, loadBilling} = require('./paths.js');
+// Session rows and billing items belong to the optional billing-manager skill; without it runs stay unbilled
+const billing = loadBilling();
 
 const CONTROLLER = path.join(__dirname, 'controller.js');
 // Sibling tool folder: tools/trello <-> tools/telegram
@@ -349,8 +349,8 @@ async function main() {
 		}
 		return;
 	}
-	const billingPath = billing.logPathFor(root);
-	const billingActive = fs.existsSync(billingPath);
+	const billingPath = billing ? billing.logPathFor(root) : '';
+	const billingActive = Boolean(billingPath) && fs.existsSync(billingPath);
 
 	if(opts.dryRun) {
 		console.log(JSON.stringify({

@@ -148,8 +148,15 @@ function toAgentsRelative(p) {
 	return idx !== -1 ? norm.slice(idx + 1) : path.basename(p);
 }
 
+/* OPTIONAL billing-manager SKILL IN THE .agents ROOT: ITS MODULE, OR null IN A STANDALONE CLONE OF THIS REPO */
+function loadBilling(root = AGENTS_ROOT) {
+	const file = path.join(root, 'skills', 'billing-manager', 'scripts', 'billing.js');
+	return fs.existsSync(file) ? require(file) : null;
+}
+
 module.exports = {
 	AGENTS_ROOT,
+	loadBilling,
 	configVars,
 	defaultScope,
 	expandPath,
