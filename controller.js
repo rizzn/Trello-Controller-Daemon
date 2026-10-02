@@ -2,9 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const {execSync} = require('child_process');
-const {expandPath, findProject, projectMatchesDir, loadBilling} = require('./paths.js');
-// Optional billing-manager skill: with it the card comment uses its estimate rule, without it the actual time
-const billing = loadBilling();
+const {expandPath, findProject, projectMatchesDir} = require('./paths.js');
 
 // 1. Load configuration from the central projects.json
 const projectsPath=path.join(__dirname,'projects.json');
@@ -1061,7 +1059,7 @@ async function completeSession(cardShortLink, manualTimeEstimate = '') {
 		const now = new Date();
 		const durationMin = Math.max(0, Math.round((now - startedAt) / 60000));
 		const actualTimeText = commentDuration(durationMin);
-		const estTimeText = manualTimeEstimate || (billing ? commentDuration(billing.defaultEstimate(durationMin)) : actualTimeText);
+		const estTimeText = manualTimeEstimate || actualTimeText;
 		const completionComment = MSG_PROCESSING_COMPLETED
 			.replace('{timestamp}', now.toLocaleString('de-DE'))
 			.replace('{actual_duration}', actualTimeText)
